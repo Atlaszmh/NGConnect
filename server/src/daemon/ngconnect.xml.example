@@ -1,0 +1,32 @@
+<service>
+	<id>ngconnect.exe</id>
+	<name>NGConnect</name>
+	<description>NGConnect Media Server Dashboard</description>
+	<executable>C:\Program Files\nodejs\node.exe</executable>
+	<argument>C:\path\to\NGConnect\server\node_modules\node-windows\lib\wrapper.js</argument>
+	<argument>--env-file=C:\path\to\NGConnect\.env</argument>
+	<argument>--file</argument>
+	<argument>C:\path\to\NGConnect\server\dist\index.js</argument>
+	<argument>--scriptoptions=</argument>
+	<argument>--log</argument>
+	<argument>NGConnect wrapper</argument>
+	<argument>--grow</argument>
+	<argument>0.25</argument>
+	<argument>--wait</argument>
+	<argument>1</argument>
+	<argument>--maxrestarts</argument>
+	<argument>3</argument>
+	<argument>--abortonerror</argument>
+	<argument>n</argument>
+	<argument>--stopparentfirst</argument>
+	<argument>undefined</argument>
+	<logmode>rotate</logmode>
+	<stoptimeout>30sec</stoptimeout>
+	<env name="NODE_ENV" value="production"/>
+	<serviceaccount>
+		<domain>YOUR-PC-NAME</domain>
+		<user>LocalSystem</user>
+		<password></password>
+	</serviceaccount>
+	<workingdirectory>C:\path\to\NGConnect\server</workingdirectory>
+</service>

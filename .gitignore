@@ -5,5 +5,7 @@ config.json
 *.log
 *.exe
 server/logs/
+server/src/daemon/ngconnect.xml
+.claude/
 .DS_Store
 Thumbs.db
