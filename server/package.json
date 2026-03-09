@@ -1,0 +1,32 @@
+{
+  "name": "ngconnect-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "cross-env NODE_OPTIONS=--env-file=../.env tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "cross-env NODE_ENV=production node --env-file=../.env dist/index.js",
+    "service:install": "tsx src/service.ts install",
+    "service:uninstall": "tsx src/service.ts uninstall"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "node-windows": "^1.0.0-beta.8",
+    "winston": "^3.19.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.3.5",
+    "cross-env": "^10.1.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
