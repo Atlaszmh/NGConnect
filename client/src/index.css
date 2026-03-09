@@ -216,10 +216,17 @@ input:focus, select:focus {
   margin-bottom: 0;
 }
 
-.header-actions {
+.header-actions,
+.page-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.retry-countdown {
+  font-size: 12px;
+  color: var(--color-muted);
+  white-space: nowrap;
 }
 
 /* Filter Bar */

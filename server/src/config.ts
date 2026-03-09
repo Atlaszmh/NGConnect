@@ -1,6 +1,25 @@
 import path from 'path';
 import fs from 'fs';
 
+// When running as a Windows service, --env-file doesn't work because
+// node-windows' wrapper.js uses child_process.fork() which doesn't
+// pass Node CLI flags to the child process. Load .env manually as fallback.
+if (!process.env.SONARR_API_KEY) {
+  const envPath = path.resolve(__dirname, '../../.env');
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf-8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim();
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+}
+
 interface ServiceConfig {
   url: string;
   apiKey: string;

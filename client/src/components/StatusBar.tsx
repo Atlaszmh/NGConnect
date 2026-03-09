@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Activity,
   Download,
@@ -32,12 +32,18 @@ interface VpnInfo {
   country?: string;
 }
 
+const BASE_INTERVAL = 15000;
+const MAX_INTERVAL = 60000;
+
 export default function StatusBar() {
   const [services, setServices] = useState<Record<string, ServiceInfo>>({});
   const [queue, setQueue] = useState<QueueSummary | null>(null);
   const [vpn, setVpn] = useState<VpnInfo | null>(null);
+  const consecutiveFailsRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const fetchStatus = useCallback(async () => {
+    let allFailed = true;
     try {
       const [statusRes, queueRes, vpnRes] = await Promise.allSettled([
         api.get('/system/status'),
@@ -47,6 +53,7 @@ export default function StatusBar() {
 
       if (statusRes.status === 'fulfilled') {
         setServices(statusRes.value.data.services);
+        allFailed = false;
       }
 
       if (queueRes.status === 'fulfilled') {
@@ -64,20 +71,46 @@ export default function StatusBar() {
             currentPct: first ? parseFloat(first.percentage) || 0 : 0,
           });
         }
+        allFailed = false;
       }
 
       if (vpnRes.status === 'fulfilled') {
         setVpn(vpnRes.value.data);
+        allFailed = false;
       }
     } catch {
       // ignore
     }
+
+    if (allFailed) {
+      consecutiveFailsRef.current = Math.min(consecutiveFailsRef.current + 1, 5);
+    } else {
+      consecutiveFailsRef.current = 0;
+    }
+
+    return allFailed;
   }, []);
 
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 15000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+
+    const schedule = async () => {
+      const allFailed = await fetchStatus();
+      if (cancelled) return;
+
+      const delay = allFailed
+        ? Math.min(BASE_INTERVAL * Math.pow(1.5, consecutiveFailsRef.current), MAX_INTERVAL)
+        : BASE_INTERVAL;
+
+      timerRef.current = setTimeout(schedule, delay);
+    };
+
+    schedule();
+
+    return () => {
+      cancelled = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [fetchStatus]);
 
   const onlineCount = Object.values(services).filter(

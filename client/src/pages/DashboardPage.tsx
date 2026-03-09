@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
 import ServiceStatus from '../components/ServiceStatus';
 import api from '../services/api';
@@ -27,6 +27,9 @@ interface CalendarEpisode {
   hasFile: boolean;
 }
 
+const BASE_INTERVAL = 30000;
+const MAX_INTERVAL = 120000;
+
 export default function DashboardPage() {
   const [services, setServices] = useState<Record<string, ServiceInfo>>({
     sonarr: { status: 'checking', url: '' },
@@ -36,19 +39,35 @@ export default function DashboardPage() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [calendar, setCalendar] = useState<CalendarEpisode[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [nextRetry, setNextRetry] = useState<number | null>(null);
+  const consecutiveFailsRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const countdownRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
-  const fetchAll = async () => {
-    setRefreshing(true);
+  const fetchAll = useCallback(async (manual = false) => {
+    if (manual) setRefreshing(true);
+
+    let hadError = false;
 
     // Fetch service statuses
     try {
       const res = await api.get('/system/status');
       setServices(res.data.services);
+      const allOnline = Object.values(res.data.services as Record<string, ServiceInfo>).every(
+        (s) => s.status === 'online'
+      );
+      if (!allOnline) hadError = true;
     } catch {
-      setServices({
-        sonarr: { status: 'offline', url: '' },
-        radarr: { status: 'offline', url: '' },
-        sabnzbd: { status: 'offline', url: '' },
+      hadError = true;
+      // Only update if this is the first failure (avoid re-render churn)
+      setServices((prev) => {
+        const allOffline = Object.values(prev).every((s) => s.status === 'offline');
+        if (allOffline) return prev;
+        return {
+          sonarr: { status: 'offline', url: '' },
+          radarr: { status: 'offline', url: '' },
+          sabnzbd: { status: 'offline', url: '' },
+        };
       });
     }
 
@@ -67,7 +86,7 @@ export default function DashboardPage() {
         }))
       );
     } catch {
-      setQueue([]);
+      setQueue((prev) => (prev.length === 0 ? prev : []));
     }
 
     // Fetch Sonarr calendar (next 7 days)
@@ -79,30 +98,90 @@ export default function DashboardPage() {
       });
       setCalendar(Array.isArray(res.data) ? res.data : []);
     } catch {
-      setCalendar([]);
+      setCalendar((prev) => (prev.length === 0 ? prev : []));
     }
 
-    setRefreshing(false);
-  };
+    if (manual) setRefreshing(false);
+
+    // Backoff: increase interval on consecutive failures, reset on success
+    if (hadError) {
+      consecutiveFailsRef.current = Math.min(consecutiveFailsRef.current + 1, 5);
+    } else {
+      consecutiveFailsRef.current = 0;
+    }
+
+    return hadError;
+  }, []);
 
   useEffect(() => {
-    fetchAll();
-    const interval = setInterval(fetchAll, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    let cancelled = false;
+
+    const schedule = async (manual = false) => {
+      const hadError = await fetchAll(manual);
+      if (cancelled) return;
+
+      const delay = hadError
+        ? Math.min(BASE_INTERVAL * Math.pow(1.5, consecutiveFailsRef.current), MAX_INTERVAL)
+        : BASE_INTERVAL;
+
+      // Update countdown display
+      if (hadError) {
+        const retryAt = Date.now() + delay;
+        setNextRetry(retryAt);
+        if (countdownRef.current) clearInterval(countdownRef.current);
+        countdownRef.current = setInterval(() => {
+          const remaining = retryAt - Date.now();
+          if (remaining <= 0) {
+            setNextRetry(null);
+            if (countdownRef.current) clearInterval(countdownRef.current);
+          } else {
+            setNextRetry(retryAt);
+          }
+        }, 1000);
+      } else {
+        setNextRetry(null);
+        if (countdownRef.current) clearInterval(countdownRef.current);
+      }
+
+      timerRef.current = setTimeout(() => schedule(), delay);
+    };
+
+    schedule();
+
+    return () => {
+      cancelled = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [fetchAll]);
+
+  const handleManualRefresh = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setNextRetry(null);
+    consecutiveFailsRef.current = 0;
+    fetchAll(true);
+  };
+
+  const retrySeconds = nextRetry ? Math.max(0, Math.ceil((nextRetry - Date.now()) / 1000)) : null;
 
   return (
     <div className="page">
       <div className="page-header">
         <h2>System Overview</h2>
-        <button
-          className="btn-icon"
-          onClick={fetchAll}
-          disabled={refreshing}
-          title="Refresh"
-        >
-          <RefreshCw size={16} className={refreshing ? 'spinning' : ''} />
-        </button>
+        <div className="page-header-actions">
+          {retrySeconds !== null && retrySeconds > 0 && (
+            <span className="retry-countdown">Retrying in {retrySeconds}s</span>
+          )}
+          <button
+            className="btn-icon"
+            onClick={handleManualRefresh}
+            disabled={refreshing}
+            title="Refresh"
+          >
+            <RefreshCw size={16} className={refreshing ? 'spinning' : ''} />
+          </button>
+        </div>
       </div>
 
       <div className="card-grid">
