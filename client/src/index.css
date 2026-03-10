@@ -419,6 +419,29 @@ input:focus, select:focus {
   margin-bottom: 4px;
 }
 
+.download-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #9399a8;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.drag-handle:hover {
+  color: var(--text-primary);
+  background-color: transparent;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
 .download-title {
   font-size: 0.85rem;
   font-weight: 500;
