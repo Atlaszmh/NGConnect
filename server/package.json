@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "cross-env NODE_ENV=production node --env-file=../.env dist/index.js",
     "service:install": "tsx src/service.ts install",
-    "service:uninstall": "tsx src/service.ts uninstall"
+    "service:uninstall": "tsx src/service.ts uninstall",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -27,6 +29,7 @@
     "@types/node": "^25.3.5",
     "cross-env": "^10.1.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }

@@ -1,8 +1,12 @@
 import { createServiceLogger } from './logger';
 import { config } from '../config';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+
+const execFileAsync = promisify(execFile);
 
 const log = createServiceLogger('vpn-monitor');
 
@@ -43,8 +47,11 @@ const REQUIRED_CONNECTED_POLLS = 3; // Must see "Connected" 3 times in a row (~4
 const listeners: Array<(state: VpnState, event: string) => void> = [];
 
 // ProtonVPN log file path on Windows
-const protonLogPath = path.join(
-  os.homedir(),
+// When running as LocalSystem service, os.homedir() returns the system profile
+// dir, not the actual user's home. Use PROTON_LOG_PATH or USERPROFILE env var
+// as fallback to find the real user's ProtonVPN logs.
+const protonLogPath = process.env.PROTON_LOG_PATH || path.join(
+  process.env.REAL_USER_HOME || os.homedir(),
   'AppData',
   'Local',
   'Proton',
@@ -81,11 +88,54 @@ function emit(event: string) {
 }
 
 /**
+ * Check if ProtonVPN TUN adapter is up via PowerShell/Get-NetAdapter.
+ * This is the most reliable detection method — doesn't depend on log files.
+ */
+async function checkNetAdapter(): Promise<boolean | null> {
+  try {
+    const { stdout } = await execFileAsync('powershell', [
+      '-NoProfile', '-Command',
+      'Get-NetAdapter -Name "ProtonVPN*" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Status',
+    ], { timeout: 5000 });
+    const status = stdout.trim();
+    if (!status) return null; // adapter not found
+    return status === 'Up';
+  } catch {
+    return null; // PowerShell failed or timed out
+  }
+}
+
+/**
+ * Parse VPN connection status from log content.
+ * Exported for testing.
+ */
+export function parseVpnStatus(content: string): boolean | null {
+  const matches = content.match(
+    /Status updated to (Connected|Disconnected|Connecting)\./g
+  );
+  if (!matches || matches.length === 0) return null;
+  const lastMatch = matches[matches.length - 1];
+  return lastMatch === 'Status updated to Connected.';
+}
+
+/**
+ * Read the tail of a file (up to maxBytes from the end).
+ */
+function readTail(filePath: string, maxBytes: number): string {
+  const stat = fs.statSync(filePath);
+  const readSize = Math.min(stat.size, maxBytes);
+  const buffer = Buffer.alloc(readSize);
+  const fd = fs.openSync(filePath, 'r');
+  fs.readSync(fd, buffer, 0, readSize, stat.size - readSize);
+  fs.closeSync(fd);
+  return buffer.toString('utf-8');
+}
+
+/**
  * Check ProtonVPN connection status by reading its log file.
- * Matches Connected, Disconnected, AND Connecting states.
- * Only explicit "Connected" is treated as connected — everything else
- * (Connecting, Disconnected, unknown) defaults to DISCONNECTED (fail-safe).
- * Returns null only if the log file doesn't exist at all.
+ * Handles log rotation: if the current file has no status lines,
+ * falls back to client-logs.1.txt (the rotated previous log).
+ * Returns null only if no log files exist at all.
  */
 function checkProtonLog(): boolean | null {
   try {
@@ -93,45 +143,50 @@ function checkProtonLog(): boolean | null {
       return null;
     }
 
-    // Read last ~64KB to handle "Connecting" spam flooding the buffer
-    const stat = fs.statSync(protonLogPath);
-    const readSize = Math.min(stat.size, 65536);
-    const buffer = Buffer.alloc(readSize);
-    const fd = fs.openSync(protonLogPath, 'r');
-    fs.readSync(fd, buffer, 0, readSize, stat.size - readSize);
-    fs.closeSync(fd);
+    const MAX_READ = 524288; // 512KB
+    const content = readTail(protonLogPath, MAX_READ);
+    let result = parseVpnStatus(content);
 
-    const tail = buffer.toString('utf-8');
-    // Match all three states: Connected, Disconnected, Connecting
-    const matches = tail.match(
-      /Status updated to (Connected|Disconnected|Connecting)\./g
-    );
-    if (!matches || matches.length === 0) {
-      // Log file exists but no status lines found — fail-safe: disconnected
-      log.warn('ProtonVPN log exists but no status lines found in last 64KB — assuming disconnected');
+    // If no status lines found, check the rotated log file (.1.txt)
+    // ProtonVPN rotates logs and the "Connected" line may only exist
+    // in the previous file after rotation
+    if (result === null) {
+      const rotatedPath = protonLogPath.replace(/\.txt$/, '.1.txt');
+      if (fs.existsSync(rotatedPath)) {
+        log.debug('No status lines in current log, checking rotated log');
+        const rotatedContent = readTail(rotatedPath, MAX_READ);
+        result = parseVpnStatus(rotatedContent);
+      }
+    }
+
+    if (result === null) {
+      log.warn('ProtonVPN log exists but no status lines found — assuming disconnected');
       return false;
     }
 
-    const lastMatch = matches[matches.length - 1];
-    // Only "Connected" (not "Connecting", not "Disconnected") counts as connected
-    const isConnected = lastMatch === 'Status updated to Connected.';
-    if (!isConnected) {
-      const state = lastMatch.match(/Status updated to (\w+)\./)?.[1] || 'unknown';
+    if (!result) {
+      const lastStatus = content.match(/Status updated to (\w+)\./g)?.pop();
+      const state = lastStatus?.match(/Status updated to (\w+)\./)?.[1] || 'unknown';
       log.debug(`ProtonVPN log last status: ${state} — treating as disconnected`);
     }
-    return isConnected;
+    return result;
   } catch {
-    // Error reading log — fail-safe: disconnected
     log.warn('Failed to read ProtonVPN log — assuming disconnected');
     return false;
   }
 }
 
 async function checkVpnStatus(): Promise<boolean> {
-  // Primary: check ProtonVPN's own log for definitive connection state
-  const protonStatus = checkProtonLog();
+  // Primary: check Windows network adapter (most reliable)
+  // Falls back to ProtonVPN log parsing if adapter check unavailable
+  let adapterStatus = await checkNetAdapter();
+  const protonStatus = adapterStatus !== null ? adapterStatus : checkProtonLog();
 
-  // Secondary: fetch public IP for display purposes
+  if (adapterStatus !== null) {
+    log.debug(`VPN adapter status: ${adapterStatus ? 'Up' : 'Down'}`);
+  }
+
+  // Fetch public IP for display purposes
   let ip = currentState.ip;
   let country = currentState.country;
   try {
@@ -153,13 +208,8 @@ async function checkVpnStatus(): Promise<boolean> {
     }
   } catch {
     // IP lookup failed — keep previous IP
-    // Connection status still determined by protonStatus below
   }
 
-  // Determine connection status
-  // ProtonVPN log is authoritative — fail-safe: only connected with explicit confirmation
-  // protonStatus is now never null when log file exists (returns false instead)
-  // null only means log file doesn't exist at all
   const isConnected = protonStatus === true;
 
   const previousIp = currentState.ip;
