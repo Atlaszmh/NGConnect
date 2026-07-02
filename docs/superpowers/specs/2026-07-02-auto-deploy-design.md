@@ -1,7 +1,7 @@
 # NGConnect Auto-Deploy — Design Spec
 
 **Date:** 2026-07-02
-**Status:** Approved (pending spec review)
+**Status:** Approved
 **Author:** Zach + Claude
 
 ## Problem
@@ -63,6 +63,11 @@ the dashboard when needed.
   the client *must* be served on the server PC. This design therefore (a) makes
   the health gate independent of `NODE_ENV` via `/healthz`, and (b) ensures
   `NODE_ENV=production` is reliably set on the server PC (see Component 2).
+- **Note:** the repo also contains an *alternate*, unused `node-windows`
+  service path (`server/src/service.ts`, which *does* set
+  `NODE_ENV=production`). That is **not** the deployed mechanism — the server
+  PC runs the "NGConnect Server" **Scheduled Task** — so this design targets and
+  fixes the Scheduled Task path only.
 
 ## Architecture Overview
 
@@ -116,7 +121,10 @@ failure. Every run appends to `deploy/logs/update.log` and rewrites
    `config.json`, `dist/`, and `node_modules/` are gitignored and survive.
 5. **Install deps** with `npm ci`, but only in the packages whose
    `package-lock.json` changed in step 3 (always safe to run; skipped only as
-   an optimization). Root first, then `server/`, then `client/`.
+   an optimization). Root first, then `server/`, then `client/`. **On the first
+   run** (no `.last-deployed`, or it's unreadable), skip the optimization and
+   run `npm ci` in all three packages, since there's no reliable prior SHA to
+   diff against.
 6. **Test before building.** `npm test` in `server/`. Tests run from source, so
    a failing test aborts the deploy **before** the known-good `dist/` is
    overwritten. On failure: log, write status (`failed` + error), exit 1. The
@@ -128,7 +136,9 @@ failure. Every run appends to `deploy/logs/update.log` and rewrites
 8. **Restart** the "NGConnect Server" task: `Stop-ScheduledTask`, then wait for
    port 3001 to be released (poll `Get-NetTCPConnection -LocalPort 3001` until
    clear, up to ~10s, to avoid the old process racing the new one for the
-   port), then `Start-ScheduledTask`.
+   port). If the port is still held after the wait, fall back to
+   `Stop-Process` on the PID that owns 3001 so we never `Start-ScheduledTask`
+   against an occupied port. Then `Start-ScheduledTask`.
 9. **Health check.** Poll `GET http://localhost:3001/healthz` for up to ~60s
    (e.g. 20 tries × 3s). **Success = HTTP 200** from the always-on liveness
    route (Component 3), which is mounted before auth and independent of
@@ -290,8 +300,14 @@ re-polls `GET /api/system/update/status`.
   one assumption to confirm during end-to-end testing.
 - **Server-checkout drift.** The design assumes the server checkout is never
   hand-edited (it's a mirror). `git reset --hard` enforces this by discarding
-  any stray local changes — intended, but worth stating so nobody edits code
-  directly on the server PC expecting it to persist.
+  any stray local *tracked* changes — intended, but worth stating so nobody
+  edits code directly on the server PC expecting it to persist. Note
+  `git reset --hard` does **not** remove *untracked* files; if an upstream
+  commit ever adds a file that already exists untracked on the server, the
+  checkout could fail. We deliberately do **not** run `git clean` (it would
+  delete gitignored runtime files like `.env`); if such a collision ever
+  occurs, the deploy fails loudly (logged, service untouched) rather than
+  silently — acceptable for a pure mirror, and resolvable by hand.
 
 ## Files Touched
 
