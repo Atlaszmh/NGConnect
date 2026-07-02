@@ -39,7 +39,8 @@ the dashboard when needed.
   `main`. Both PCs are now proper git clones tracking `origin/main`.
 - Monorepo: root `package.json` orchestrates `client/` (React + Vite) and
   `server/` (Express + TypeScript). `npm run build` builds both;
-  `npm test` in `server/` runs vitest (12 tests today).
+  `npm test` in `server/` runs vitest (one file, 12 test cases today, all
+  passing — verified by running it).
 - The server runs in production via an existing **"NGConnect Server"**
   Scheduled Task (`install-service.ps1`), which runs
   `node --env-file=../.env dist/index.js` from `server/`, at boot, with
@@ -47,9 +48,21 @@ the dashboard when needed.
 - `.gitignore` already ignores `.env`, `config.json`, `*.log`, `dist/`, and
   `node_modules/`. Secrets and build output are therefore never touched by a
   `git reset --hard`.
-- In production the server serves the built client at `/` **without auth**;
-  the JSON API under `/api/*` (except `/api/auth`) requires auth. So an
-  unauthenticated liveness probe should hit `GET /` (not `/api/system/health`).
+- **Static client serving is gated on `NODE_ENV === 'production'`**
+  (`server/src/index.ts:41`); when off, `GET /` falls through to the 404
+  handler. The JSON API under `/api/*` (except `/api/auth`) requires auth, and
+  the existing `/api/system/health` is **behind auth** — so there is no
+  auth-free, always-on liveness endpoint today. This design **adds one**
+  (`GET /healthz`, see Component 3) rather than probing `GET /`, so the health
+  gate does not depend on `NODE_ENV` or on the client build being present.
+- **Latent bug in `install-service.ps1`:** its comment (line ~79) says it sets
+  `NODE_ENV=production` for the "NGConnect Server" task, but the task action is
+  just `node --env-file=../.env dist/index.js` — `NODE_ENV` is **never set** by
+  the task. So the dashboard client is only served if `.env` happens to contain
+  `NODE_ENV=production`. Because our new Settings button lives in that client,
+  the client *must* be served on the server PC. This design therefore (a) makes
+  the health gate independent of `NODE_ENV` via `/healthz`, and (b) ensures
+  `NODE_ENV=production` is reliably set on the server PC (see Component 2).
 
 ## Architecture Overview
 
@@ -112,10 +125,15 @@ failure. Every run appends to `deploy/logs/update.log` and rewrites
    step 6 — but note `dist/` may now be partially written; the previous run's
    service process keeps its already-loaded code until we restart, and the next
    successful run rebuilds cleanly. (See Risks.)
-8. **Restart** the "NGConnect Server" task:
-   `Stop-ScheduledTask` then `Start-ScheduledTask` (or `schtasks /end` + `/run`).
-9. **Health check.** Poll `GET http://localhost:3001/` for up to ~60s
-   (e.g. 20 tries × 3s). Success = any HTTP response. On timeout: log, write
+8. **Restart** the "NGConnect Server" task: `Stop-ScheduledTask`, then wait for
+   port 3001 to be released (poll `Get-NetTCPConnection -LocalPort 3001` until
+   clear, up to ~10s, to avoid the old process racing the new one for the
+   port), then `Start-ScheduledTask`.
+9. **Health check.** Poll `GET http://localhost:3001/healthz` for up to ~60s
+   (e.g. 20 tries × 3s). **Success = HTTP 200** from the always-on liveness
+   route (Component 3), which is mounted before auth and independent of
+   `NODE_ENV`. A connection refused, timeout, or any non-200 counts as not-yet-
+   healthy and is retried within the window. On overall timeout: log, write
    status (`failed` + "health check timed out"), exit 1. We do **not** roll the
    restart back — the service task itself auto-restarts, and the next run
    retries; worst case the log explains why.
@@ -164,12 +182,29 @@ re-registering replaces the task).
      it can restart the server task; matches how "NGConnect Server" is set up).
 3. **Confirm** the "NGConnect Server" task exists; if not, tell the user to run
    `install-service.ps1` first.
-4. Print a summary and optionally trigger one immediate run.
+4. **Ensure `NODE_ENV=production` on the server PC** so the dashboard client
+   (and therefore the Settings button) is actually served. Check whether `.env`
+   contains a `NODE_ENV=production` line; if not, append it (the server task
+   already loads `.env` via `--env-file`, so this is sufficient). This closes
+   the latent `install-service.ps1` gap noted in Context without changing the
+   server task's action. The gap is also fixed at its source — see Files
+   Touched — but the installer guarantees a correct running server regardless.
+5. Print a summary and optionally trigger one immediate run.
 
 ## Component 3: Dashboard "Updates" panel
 
 Small addition to the existing app, following current patterns
 (`client/src/pages/SettingsPage.tsx` cards + `client/src/services/api.ts`).
+
+**Server — one always-on liveness route in `server/src/index.ts`:**
+
+- `GET /healthz` — mounted **before** the auth-protected routes and the
+  `NODE_ENV`-gated static block (e.g. right after `express.json()`), returning
+  `200 { status: 'ok' }` unconditionally. This is the endpoint the updater's
+  health check polls (step 9). It is deliberately unauthenticated, always
+  mounted regardless of `NODE_ENV`, and independent of the client build, so it
+  is a true "is the new server process up and serving HTTP" gate. Distinct from
+  the existing auth-gated `/api/system/health`, which stays as-is.
 
 **Server — two routes in `server/src/routes/system.ts` (authed, like siblings):**
 
@@ -204,8 +239,8 @@ mid-request is fine because the request already returned.
 
 **Scheduled/boot deploy:**
 `git push` (dev) → hourly/boot trigger → `update.ps1` → fetch → (changed?) →
-reset → `npm ci` → test → build → restart "NGConnect Server" → health check →
-write `.last-deployed` + `.deploy-status.json`.
+reset → `npm ci` → test → build → restart "NGConnect Server" → health check
+(`GET /healthz` == 200) → write `.last-deployed` + `.deploy-status.json`.
 
 **On-demand deploy:**
 Settings button → `POST /api/system/update/check` → `schtasks /run "NGConnect
@@ -221,7 +256,7 @@ re-polls `GET /api/system/update/status`.
 | `npm ci` fails | Log, write `failed`, exit 1 **before** build. Old `dist/` intact. |
 | `npm test` fails | Log, write `failed`, exit 1 **before** build. Old `dist/` intact. |
 | `npm run build` fails | Log, write `failed`, exit 1. Service not restarted; keeps running old loaded code; next run rebuilds. |
-| Health check times out | Log, write `failed`, exit 1. Service task auto-restarts; retried next run. |
+| Health check (`/healthz` != 200) times out | Log, write `failed`, exit 1. Service task auto-restarts; retried next run. |
 | Button pressed, task absent | API returns `updater-not-installed`; UI shows a clear message. |
 | Two runs overlap | Lock + `IgnoreNew`: second logs and exits 0. |
 
@@ -235,6 +270,8 @@ re-polls `GET /api/system/update/status`.
   running service, and writes a `failed` status.
 - **Server routes:** unit-test `GET /update/status` (missing file → default;
   present file → parsed) with vitest, matching the existing server test style.
+  Also confirm `GET /healthz` returns 200 without auth and regardless of
+  `NODE_ENV`.
 - **End-to-end on the server PC:** run `install-updater.ps1`, then make a
   trivial commit on the dev PC, push, and confirm the server updates within the
   hour (or immediately via the button). Verify the elevated-task-restart
@@ -266,6 +303,15 @@ re-polls `GET /api/system/update/status`.
 **Modified:**
 - `.gitignore` — add `deploy/.last-deployed`, `deploy/.deploy-status.json`,
   `deploy/.update.lock` (logs already covered by `*.log`).
+- `server/src/index.ts` — add the always-on unauthenticated `GET /healthz`
+  route (before auth and the `NODE_ENV` static block).
 - `server/src/routes/system.ts` — two `/update/*` routes.
 - `client/src/pages/SettingsPage.tsx` — "Updates" card; use real version.
-- Possibly a small server test file under `server/src/**` for the status route.
+- `install-service.ps1` — fix the latent `NODE_ENV` gap at its source: set
+  `NODE_ENV=production` for the "NGConnect Server" task reliably (e.g. ensure
+  the `.env` it loads contains it, and correct the misleading comment/dead code
+  at lines ~79–83). This makes production static-serving dependable rather than
+  accidental. (`install-updater.ps1` also guarantees it at setup time, per
+  Component 2 — belt and suspenders.)
+- A small server test file under `server/src/**` for the status and `/healthz`
+  routes.
