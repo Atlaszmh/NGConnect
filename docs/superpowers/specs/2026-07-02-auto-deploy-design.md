@@ -153,9 +153,13 @@ failure. Every run appends to `deploy/logs/update.log` and rewrites
 **Ordering guarantees the safety property:** success is persisted only in step
 10, so any earlier failure means the next run re-attempts the same target SHA.
 
-**`-DryRun` switch:** runs steps 1–7 (through build) but skips the service
-restart (steps 8–9) and does not write `.last-deployed`. Used to test the
-script on the dev PC without disturbing anything.
+**`-DryRun` switch:** for safe testing on the dev PC. Runs the lock, fetch,
+lockfile-diff, `npm ci`, test, and build against the **current working tree**,
+but SKIPS the destructive `git reset --hard` (step 4), the service restart and
+health check (steps 8–9), and the `.last-deployed` write (step 10). It still
+writes `.deploy-status.json` so the run is observable. Skipping the reset is
+what makes it safe to run on a dev checkout without discarding uncommitted or
+unpushed local work.
 
 **Logging:** append human-readable lines with timestamps. Before writing, if
 `update.log` exceeds ~200 KB, truncate to the most recent ~200 KB so it can't
@@ -272,9 +276,10 @@ re-polls `GET /api/system/update/status`.
 
 ## Testing Strategy
 
-- **`update.ps1` on the dev PC** with `-DryRun`: exercises fetch → reset → ci →
-  test → build without restarting anything. Verifies the happy path and the
-  "up-to-date" fast exit. (The dev PC is now an identical clone.)
+- **`update.ps1` on the dev PC** with `-DryRun`: exercises fetch → ci → test →
+  build against the current tree (deliberately **skips** the destructive
+  `git reset --hard`, and does not restart the service). Verifies the pipeline
+  runs and that a healthy tree builds. (The dev PC is an identical clone.)
 - **Deliberate-failure checks:** temporarily point at a commit with a failing
   test / bad build and confirm the script exits non-zero *before* touching the
   running service, and writes a `failed` status.
