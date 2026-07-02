@@ -17,8 +17,11 @@ the dashboard when needed.
 
 - Push to `main` on GitHub → server PC self-updates within the hour.
 - Fully headless on the server PC (no prompts, runs at boot + hourly).
-- A broken commit must never take the running server down: test before build,
-  build before restart, and only record success at the very end.
+- A commit that fails to build or test must never reach the running server:
+  test before build, build before restart, and only record success at the very
+  end. (This does not cover runtime-only failures — see Risks: a commit that
+  builds and tests cleanly but crashes at runtime restarts into the bad build
+  with no automatic rollback.)
 - A **"Check for Updates Now"** button in the dashboard Settings page to
   expedite a check on demand.
 - The updater is version-controlled in the repo, so improvements to it deploy
@@ -300,6 +303,18 @@ re-polls `GET /api/system/update/status`.
   abort before restart, and the next successful run rebuilds from clean source.
   If this proves flaky, a future improvement is building to a temp dir and
   swapping on success — deferred (YAGNI) unless observed.
+- **No rollback on runtime failure.** The "test before build, build before
+  restart" ordering protects against commits that fail to compile or fail
+  tests — those abort before `dist/` is touched, and the old build keeps
+  running. It does **not** protect against a commit that builds and tests
+  cleanly but then fails at runtime (crash on startup, or `/healthz` never
+  returns 200): by then the updater has already reset, rebuilt, and restarted
+  into the bad build, and `.last-deployed` still points at the previous SHA so
+  it retries next run — but there is no automatic revert to the prior build, so
+  the dashboard can be down until a fix is pushed. The server task's own
+  auto-restart limits the blast radius. Full rollback (e.g. tag last-good,
+  rebuild+restart it on health failure) is a deliberate non-goal — revisit only
+  if runtime-only breakages actually occur.
 - **On-demand trigger elevation.** Starting an elevated Scheduled Task from the
   non-elevated web process should work (starting ≠ modifying), but this is the
   one assumption to confirm during end-to-end testing.

@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let the server PC self-update from `origin/main` (at boot + hourly, plus an on-demand dashboard button), safely testing and building each change before restarting, so a broken commit never takes the running server down.
+**Goal:** Let the server PC self-update from `origin/main` (at boot + hourly, plus an on-demand dashboard button), testing and building each change before restarting so a commit that fails to build or test never reaches the running server.
 
 **Architecture:** A version-controlled PowerShell updater (`deploy/update.ps1`) run by a "NGConnect Updater" Scheduled Task fetches `origin/main`, and on change: `reset --hard` → selective `npm ci` → **test → build → restart → health-check `/healthz`** → record success only at the end. The dashboard gains an always-on unauthenticated `/healthz` liveness route, two authed `/api/system/update/*` routes (status + on-demand trigger), and an "Updates" card in Settings. The web process never runs git/build logic itself — the button just triggers the same Scheduled Task, so scheduled and on-demand deploys are identical.
+
+**Failure model (important — no runtime rollback):** The safety guarantee covers the common case: a commit that fails to compile or fails tests aborts *before* the build/restart, so `dist/` is untouched and the server keeps running the old build. It does **not** cover a commit that builds and tests cleanly but then fails at runtime (crashes on startup, or `/healthz` never returns 200): by that point the updater has already reset, rebuilt, and restarted into the new build, and there is **no automatic rollback** to the prior build. The "NGConnect Server" task's own auto-restart and the next hourly retry limit the blast radius, but the dashboard can be down until a fixing commit is pushed. Automatic rollback-on-runtime-failure is a deliberate non-goal (see spec); revisit if runtime-only breakages happen in practice.
 
 **Tech Stack:** Node 20+/Express 5 + TypeScript (server), React + Vite + TypeScript (client), vitest (server tests, pure-function style), PowerShell + Windows Scheduled Tasks (deploy), git.
 
@@ -758,7 +760,11 @@ try {
         Write-Status 'up-to-date' $remote (& git log -1 --format='%s' origin/main).Trim() $null
         exit 0
     }
-    Write-Log "Update: $current -> $remote"
+    if ($remote -eq $current) {
+        Write-Log "DryRun: building current tree at $remote (already up to date)."
+    } else {
+        Write-Log "Update: $current -> $remote"
+    }
 
     # 3. Which lockfiles changed? (empty base on first run => treat all as changed)
     $changed = @()
@@ -1111,7 +1117,7 @@ describe('deliberate failure', () => {
 
 - [ ] **Step 3: Run the updater and confirm it aborts before building**
 
-Run:
+Run (Git Bash — uses `$?` for the child exit code; from a PowerShell prompt use `$LASTEXITCODE` instead):
 ```bash
 powershell -NoProfile -ExecutionPolicy Bypass -File deploy/update.ps1 -DryRun; echo "exit=$?"
 ```
@@ -1175,7 +1181,7 @@ In the dashboard on the server PC, open Settings → Updates → **Check for Upd
 ```powershell
 (Get-ScheduledTaskInfo -TaskName 'NGConnect Updater').LastRunTime
 ```
-Expected: a timestamp within the last minute. If the button 409s as "not installed," re-check the task name matches `NGConnect Updater` exactly.
+Expected: a timestamp within the last minute (`LastRunTime` is set when the task starts, so the run may still be in progress doing `npm ci`/build — don't also expect `LastTaskResult == 0` immediately). If the button 409s as "not installed," re-check the task name matches `NGConnect Updater` exactly.
 
 - [ ] **Step 3: End-to-end smoke test**
 
