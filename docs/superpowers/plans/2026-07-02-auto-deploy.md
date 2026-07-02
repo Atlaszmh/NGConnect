@@ -20,7 +20,6 @@
 - `server/src/routes/health.ts` — the always-on unauthenticated `healthRouter` exposing `GET /healthz`.
 - `deploy/update.ps1` — the updater pipeline (boot/hourly/on-demand).
 - `deploy/install-updater.ps1` — one-time admin setup on the server PC.
-- `deploy/README.md` — short operator notes (how it works, where logs live, how to check status).
 
 **Modified files:**
 - `server/src/index.ts` — mount `healthRouter` before auth and the `NODE_ENV` static block.
@@ -34,6 +33,27 @@
 - `deploy/.last-deployed` — last successfully deployed SHA.
 - `deploy/.update.lock` — single-instance lock.
 - `deploy/logs/update.log` — append-only log (already covered by `*.log`).
+
+---
+
+## Chunk 0: Branch setup
+
+### Task 0: Create the feature branch
+
+All implementation commits land on a dedicated branch so the work can be
+reviewed and merged as a unit. Do this before Task 1.
+
+**Files:** none (git only)
+
+- [ ] **Step 1: Create and switch to the feature branch**
+
+Run: `git checkout -b feature/auto-deploy`
+Expected: `Switched to a new branch 'feature/auto-deploy'`.
+
+- [ ] **Step 2: Confirm the starting point**
+
+Run: `git status && git log --oneline -1`
+Expected: clean tree on `feature/auto-deploy`, HEAD at the latest plan commit.
 
 ---
 
@@ -125,6 +145,15 @@ describe('readDeployStatus', () => {
     const p = tmpFile(JSON.stringify(status));
     expect(readDeployStatus(p)).toEqual(status);
   });
+
+  it('fills missing fields from the default (partial file)', () => {
+    const p = tmpFile(JSON.stringify({ result: 'updated', sha: 'abc1234' }));
+    expect(readDeployStatus(p)).toEqual({
+      ...DEFAULT_DEPLOY_STATUS,
+      result: 'updated',
+      sha: 'abc1234',
+    });
+  });
 });
 ```
 
@@ -183,7 +212,7 @@ export function readDeployStatus(filePath: string): DeployStatus {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd server && npx vitest run src/services/deploy.test.ts`
-Expected: PASS (3 tests).
+Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -300,7 +329,7 @@ export function triggerUpdateCheck(): Promise<TriggerResult> {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd server && npx vitest run src/services/deploy.test.ts`
-Expected: PASS (7 tests total in the file).
+Expected: PASS (8 tests total in the file: 4 `readDeployStatus` + 4 `classifyTriggerResult`).
 
 - [ ] **Step 5: Run the full server suite to confirm no regressions**
 
@@ -361,14 +390,24 @@ app.use(healthRouter);
 Run: `cd server && npm run build`
 Expected: `tsc` completes with no errors; `server/dist/routes/health.js` exists.
 
-- [ ] **Step 4: Manually verify the route returns 200 without auth**
+- [ ] **Step 4: Manually verify the route returns 200 without auth (PowerShell)**
 
-Run (two commands):
-```bash
-cd server && cross-env NODE_ENV=development node --env-file=../.env dist/index.js &
-sleep 3 && curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/healthz
+Run this PowerShell block from the repo root (starts the server under
+`NODE_ENV=development` — proving `/healthz` is independent of the production
+static block — probes it, then stops it):
+
+```powershell
+$env:NODE_ENV = 'development'
+$p = Start-Process node -ArgumentList '--env-file=../.env','dist/index.js' -WorkingDirectory (Resolve-Path server) -PassThru
+try {
+  Start-Sleep -Seconds 3
+  (Invoke-WebRequest -UseBasicParsing -Uri http://localhost:3001/healthz).StatusCode
+} finally {
+  Stop-Process -Id $p.Id -Force
+  Remove-Item Env:\NODE_ENV
+}
 ```
-Expected: `200` (note: `NODE_ENV=development`, proving the route is independent of the production static block). Stop the server afterward (`kill %1` or Ctrl+C).
+Expected: `200`. (The server prints its startup log; the probe prints `200`.)
 
 - [ ] **Step 5: Commit**
 
@@ -423,9 +462,12 @@ systemRouter.post('/update/check', async (_req: Request, res: Response) => {
 Run: `cd server && npm run build`
 Expected: `tsc` completes with no errors.
 
-- [ ] **Step 3: Manually verify status endpoint shape**
+- [ ] **Step 3: Confirm the routes compile and register**
 
-With the server running (dev mode is fine) and authenticated, `GET /api/system/update/status` returns the default `{ "result": "unknown", ... }` when no status file exists yet. (Full auth flow is exercised in the Chunk 4 end-to-end task; here just confirm the server starts and the route is registered without error.)
+The status/check routes are thin wrappers over the already-unit-tested
+`deploy.ts` functions; their behavior is exercised end-to-end in Chunk 4 (the
+authenticated request flow and the on-demand trigger). Here, just confirm the
+server still builds with the new routes wired in.
 
 Run: `cd server && npm run build && echo "build ok"`
 Expected: `build ok`.
@@ -488,6 +530,8 @@ const checkForUpdates = async () => {
       // The updater may restart the server; re-poll status after a delay.
       setTimeout(loadDeployStatus, 8000);
     } else if (res.data?.reason === 'updater-not-installed') {
+      // Defensive: the server returns 409 for this case (handled in catch),
+      // so this branch only fires if it ever returns not-installed with a 2xx.
       setCheckState('not-installed');
     } else {
       setCheckState('error');
@@ -500,7 +544,16 @@ const checkForUpdates = async () => {
 };
 ```
 
-Extend the existing `useEffect(() => { testAll(); }, [])` to also call `loadDeployStatus()`:
+Extend the existing mount effect to also call `loadDeployStatus()`. On disk
+(SettingsPage.tsx:50–52) it is formatted across three lines:
+
+```tsx
+useEffect(() => {
+  testAll();
+}, []);
+```
+
+Change it to:
 
 ```tsx
 useEffect(() => {
@@ -614,8 +667,10 @@ Create `deploy/update.ps1`:
     Safe by construction: success is recorded only after a healthy restart, so
     any failure leaves the last-good build running and is retried next run.
 .PARAMETER DryRun
-    Runs fetch -> reset -> npm ci -> test -> build but SKIPS the service restart,
-    health check, and writing .last-deployed. For testing on the dev PC.
+    For testing on the dev PC. Runs fetch -> npm ci -> test -> build against the
+    CURRENT working tree, but SKIPS the destructive 'git reset --hard', the
+    service restart, the health check, and writing .last-deployed. Still writes
+    .deploy-status.json so the run is observable.
 #>
 param([switch]$DryRun)
 
@@ -640,11 +695,18 @@ function Write-Log([string]$msg) {
     Write-Host $line
 }
 
-function Trim-Log {
+function Limit-Log {
     if ((Test-Path $LogFile) -and ((Get-Item $LogFile).Length -gt $MaxLogBytes)) {
         $keep = Get-Content $LogFile -Tail 2000
         Set-Content -Path $LogFile -Value $keep
     }
+}
+
+function Write-Utf8NoBom([string]$path, [string]$content) {
+    # Node's fs.readFileSync(..,'utf-8') + JSON.parse do NOT tolerate a BOM, and
+    # Set-Content -Encoding utf8 writes one on Windows PowerShell 5.1 — which
+    # would make the dashboard's status read always fall back to the default.
+    [System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))
 }
 
 function Write-Status([string]$result, [string]$sha, [string]$subject, [string]$err) {
@@ -655,20 +717,23 @@ function Write-Status([string]$result, [string]$sha, [string]$subject, [string]$
         result    = $result
         error     = $err
     }
-    ($obj | ConvertTo-Json -Compress) | Set-Content -Path $StatusFile -Encoding utf8
+    Write-Utf8NoBom $StatusFile ($obj | ConvertTo-Json -Compress)
 }
 
-function Run([string]$exe, [string[]]$args, [string]$cwd) {
+# NB: the parameter must NOT be named $args — that is a PowerShell automatic
+# variable, so a param called $args never receives the caller's array and the
+# command would run with no arguments.
+function Run([string]$exe, [string[]]$argList, [string]$cwd) {
     Push-Location $cwd
     try {
-        & $exe @args
-        if ($LASTEXITCODE -ne 0) { throw "$exe $($args -join ' ') exited $LASTEXITCODE" }
+        & $exe @argList
+        if ($LASTEXITCODE -ne 0) { throw "$exe $($argList -join ' ') exited $LASTEXITCODE" }
     } finally {
         Pop-Location
     }
 }
 
-Trim-Log
+Limit-Log
 
 # 1. Single-instance guard
 $lock = $null
@@ -703,9 +768,14 @@ try {
     }
     $firstRun = [string]::IsNullOrWhiteSpace($current)
 
-    # 4. Update working tree to the target
-    Write-Log 'Resetting working tree to origin/main...'
-    Run 'git' @('reset', '--hard', 'origin/main') $RepoRoot
+    # 4. Update working tree to the target. Skipped under -DryRun so the script
+    #    is safe to run on a dev checkout without discarding local/unpushed work.
+    if (-not $DryRun) {
+        Write-Log 'Resetting working tree to origin/main...'
+        Run 'git' @('reset', '--hard', 'origin/main') $RepoRoot
+    } else {
+        Write-Log 'DryRun: skipping git reset --hard (building the current tree).'
+    }
 
     # 5. Install deps (only changed packages; all three on first run)
     function Should-Install($lockPath) {
@@ -757,13 +827,15 @@ try {
     }
     if (-not $healthy) {
         Write-Log 'ERROR: health check timed out.'
-        Write-Status 'failed' $current (& git log -1 --format='%s' origin/main).Trim() 'health check timed out'
+        # Record $remote (the SHA we just deployed and restarted into), not the
+        # old $current — the working tree is already at $remote by this point.
+        Write-Status 'failed' $remote (& git log -1 --format='%s' origin/main).Trim() 'health check timed out'
         exit 1
     }
 
     # 10. Record success LAST
     $subject = (& git log -1 --format='%s' origin/main).Trim()
-    Set-Content -Path $LastDeployed -Value $remote
+    Write-Utf8NoBom $LastDeployed $remote
     Write-Status 'updated' $remote $subject $null
     Write-Log "Deployed $remote successfully."
     exit 0
@@ -863,12 +935,16 @@ if (Test-Path $EnvFile) {
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
+# update.ps1 derives all its paths from $PSScriptRoot and does its own
+# Set-Location, so -WorkingDirectory here is not load-bearing (set for tidiness).
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
     -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$UpdatePs1`"" `
     -WorkingDirectory $RepoRoot
 $atBoot = New-ScheduledTaskTrigger -AtStartup
+# Omit -RepetitionDuration => repeat indefinitely. Do NOT use [TimeSpan]::MaxValue:
+# some Windows builds reject or silently coerce it, dropping the hourly repeat.
 $hourly = New-ScheduledTaskTrigger -Once -At (Get-Date).Date `
-    -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration ([TimeSpan]::MaxValue)
+    -RepetitionInterval (New-TimeSpan -Hours 1)
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
     -ExecutionTimeLimit (New-TimeSpan -Hours 1)
@@ -877,7 +953,17 @@ $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -Ru
 Register-ScheduledTask -TaskName $TaskName -Action $action `
     -Trigger @($atBoot, $hourly) -Settings $settings -Principal $principal `
     -Description 'Polls origin/main and self-deploys NGConnect (boot + hourly).' | Out-Null
-Write-Host "  [OK] Registered '$TaskName' (at boot + every hour)." -ForegroundColor Green
+
+# Read back and confirm the hourly repetition actually registered (guards against
+# a Windows build coercing/dropping it, which would silently break "hourly").
+$reg = Get-ScheduledTask -TaskName $TaskName
+$interval = ($reg.Triggers | Where-Object { $_.Repetition.Interval } | Select-Object -First 1).Repetition.Interval
+if ($interval -eq 'PT1H') {
+    Write-Host "  [OK] Registered '$TaskName' (at boot + every hour; repetition PT1H confirmed)." -ForegroundColor Green
+} else {
+    Write-Host "  [WARN] Registered '$TaskName', but the hourly repetition read back as '$interval' (expected PT1H)." -ForegroundColor Yellow
+    Write-Host '         The boot trigger still works; re-run this installer or add the hourly trigger by hand.' -ForegroundColor Yellow
+}
 
 # 4. Confirm the server task exists
 if (-not (Get-ScheduledTask -TaskName $ServerTask -ErrorAction SilentlyContinue)) {
@@ -921,6 +1007,9 @@ In `install-service.ps1`, after the `$EnvFile` existence check block (around lin
 ```powershell
 # Ensure NODE_ENV=production so the server serves the built client (index.ts
 # gates static serving on NODE_ENV). The task loads .env via --env-file.
+# Note: only appends when .env already exists. Creating .env when absent is
+# intentionally left to install-updater.ps1 (this installer only warns), so the
+# two scripts don't both try to author a fresh .env.
 if (Test-Path $EnvFile) {
     $envText = Get-Content $EnvFile -Raw
     if ($envText -notmatch '(?m)^\s*NODE_ENV\s*=') {
@@ -963,7 +1052,10 @@ git commit -m "fix(deploy): reliably set NODE_ENV=production for the server task
 
 ### Task 10: Dry-run the updater on the dev PC
 
-Verifies the happy path and the "up-to-date" fast exit without disturbing anything (no restart, no `.last-deployed` write).
+Verifies the pipeline runs fetch → npm ci → test → build against the current
+tree and builds cleanly, **without** restarting the service, writing
+`.last-deployed`, or running the destructive `git reset --hard` (so it's safe on
+this dev checkout).
 
 - [ ] **Step 1: Run the updater in dry-run mode**
 
@@ -971,27 +1063,42 @@ Run:
 ```bash
 powershell -NoProfile -ExecutionPolicy Bypass -File deploy/update.ps1 -DryRun
 ```
-Expected: log lines showing fetch → (if `origin/main` moved) reset/ci/test/build, ending with "DryRun: skipping restart…"; exit code 0. If already up to date and no prior `.last-deployed`, it proceeds through build once. `git status` afterward should show a clean tree at `origin/main`.
+Expected: log lines showing "Fetching origin/main...", "DryRun: skipping git reset --hard...", one or more "npm ci" lines, "Running server tests...", "Building client + server...", ending with "DryRun: skipping restart, health check, and .last-deployed write."; exit code 0.
 
-- [ ] **Step 2: Confirm a status file was written**
+- [ ] **Step 2: Confirm the working tree is unchanged (reset was skipped)**
+
+Run: `git status --short && git rev-parse --abbrev-ref HEAD`
+Expected: still on `feature/auto-deploy` with no unexpected tracked-file changes — proving the dry-run did not reset the checkout to `origin/main`.
+
+- [ ] **Step 3: Confirm a status file was written**
 
 Run: `cat deploy/.deploy-status.json`
-Expected: JSON with `"result": "updated"` (dry-run writes an `updated` status without touching `.last-deployed`).
+Expected: JSON with `"result":"updated"` and **no leading BOM** (parses cleanly). Dry-run writes status but not `.last-deployed`:
 
-- [ ] **Step 3: Confirm no service was touched**
+Run: `test -f deploy/.last-deployed && echo present || echo absent`
+Expected: `absent`.
+
+- [ ] **Step 4: Confirm no service was touched**
 
 Run: `powershell -NoProfile -Command "Get-ScheduledTask -TaskName 'NGConnect Updater' -ErrorAction SilentlyContinue | Select-Object TaskName"`
 Expected: no output on the dev PC (the updater task is only installed on the server PC) — proving the dry-run didn't require or start it.
 
 ---
 
-### Task 11: Deliberate-failure check (safety property)
+### Task 11: Deliberate-failure check (the core safety property)
 
-Confirms a bad commit aborts **before** the build/restart and leaves status `failed`.
+Confirms that when a test fails, `update.ps1` aborts **before** the build step —
+so a bad commit never overwrites the known-good `dist/`. This runs the actual
+script, not `npm test` in isolation, so it exercises the real step ordering.
 
-- [ ] **Step 1: Temporarily break a test**
+- [ ] **Step 1: Record the current dist/ build time**
 
-Create a throwaway failing test at `server/src/services/_failcheck.test.ts`:
+Run: `powershell -NoProfile -Command "(Get-Item server/dist/index.js).LastWriteTime.ToString('o')"`
+Expected: a timestamp (note it down for Step 4). If `server/dist` doesn't exist yet, run `cd server && npm run build` first, then re-read.
+
+- [ ] **Step 2: Inject a deliberately failing test (untracked)**
+
+Create `server/src/services/_failcheck.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -1000,22 +1107,41 @@ describe('deliberate failure', () => {
 });
 ```
 
-- [ ] **Step 2: Run the updater's test+build sequence manually**
+(It's untracked, and `-DryRun` skips `git reset --hard`, so it stays in place during the run.)
 
-Run: `cd server && npm test`
-Expected: FAIL (the deliberate test fails). This is the exact command `update.ps1` runs at step 6 — a failure here aborts the pipeline before step 7 (build), so the existing `dist/` is never overwritten.
+- [ ] **Step 3: Run the updater and confirm it aborts before building**
 
-- [ ] **Step 3: Remove the throwaway test**
+Run:
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/update.ps1 -DryRun; echo "exit=$?"
+```
+Expected: log ends with an `ERROR:` line about the failed tests; `exit=1`. Crucially, the log shows "Running server tests..." but **NOT** "Building client + server..." — the build step was never reached.
 
-Run: `rm server/src/services/_failcheck.test.ts`
-Then confirm green: `cd server && npm test`
-Expected: PASS.
+Verify from the log explicitly:
+```bash
+grep -c "Building client + server" deploy/logs/update.log
+```
+Expected: this count did **not** increase for the failed run (inspect the tail of `deploy/logs/update.log` to confirm the last run has "Running server tests..." with no following "Building..." line).
 
-- [ ] **Step 4: No commit** (the throwaway file is deleted; nothing to commit).
+- [ ] **Step 4: Confirm dist/ was not rebuilt and status is "failed"**
+
+Run: `powershell -NoProfile -Command "(Get-Item server/dist/index.js).LastWriteTime.ToString('o')"`
+Expected: **identical** to the Step 1 timestamp — `dist/` was untouched.
+
+Run: `cat deploy/.deploy-status.json`
+Expected: JSON with `"result":"failed"` and a non-null `"error"`.
+
+- [ ] **Step 5: Remove the throwaway test and confirm green**
+
+Run: `rm server/src/services/_failcheck.test.ts && cd server && npm test`
+Expected: PASS (the deliberate failure is gone). Nothing to commit (the file was untracked).
 
 ---
 
 ### Task 12: Merge to main and roll out on the server PC
+
+Throughout this task, `<repo>` = the server PC's clone path — the same directory
+the "NGConnect Server" scheduled task runs from.
 
 - [ ] **Step 1: Merge the feature branch to `main` and push**
 
@@ -1024,7 +1150,7 @@ git checkout main
 git merge --no-ff feature/auto-deploy -m "feat: auto-deploy from origin/main with dashboard force-check"
 git push origin main
 ```
-Expected: push succeeds; `origin/main` now contains the deploy scripts and dashboard changes.
+Expected: push succeeds; `origin/main` now contains the deploy scripts and dashboard changes. (Nothing auto-deploys yet — the server PC does not poll until the updater is installed in Step 2.)
 
 - [ ] **Step 2: On the server PC — pull once, then install the updater**
 
@@ -1033,11 +1159,23 @@ On the server PC (one-time), pull the new code and run the installer as Administ
 git -C <repo> pull
 powershell -NoProfile -ExecutionPolicy Bypass -File <repo>\deploy\install-updater.ps1
 ```
-Expected: "Registered 'NGConnect Updater' (at boot + every hour)"; NODE_ENV ensured in `.env`; server task confirmed present.
+Expected: "Registered 'NGConnect Updater' (at boot + every hour; repetition PT1H confirmed)"; NODE_ENV ensured in `.env`; server task confirmed present. If you instead see the `[WARN]` about repetition, the hourly trigger didn't register — re-run the installer or add the hourly trigger by hand before relying on unattended updates.
 
-- [ ] **Step 2a: Verify the button's elevation assumption**
+- [ ] **Step 2a: Confirm `/healthz` is reachable in production (unauthenticated)**
 
-In the dashboard on the server PC, open Settings → Updates → **Check for Updates Now**. Confirm the request returns `triggered: true` (not a 409) — verifying the non-elevated web process can start the elevated updater task. If it 409s as "not installed," re-check the task name matches `NGConnect Updater` exactly.
+On the server PC (where `NODE_ENV=production`):
+```powershell
+(Invoke-WebRequest -UseBasicParsing -Uri http://localhost:3001/healthz).StatusCode
+```
+Expected: `200` — confirming the liveness gate the updater relies on works under production, without auth.
+
+- [ ] **Step 2b: Verify the button's elevation assumption**
+
+In the dashboard on the server PC, open Settings → Updates → **Check for Updates Now**. Confirm the request returns `triggered: true` (not a 409) — the non-elevated web process could start the elevated updater task. Then confirm the task actually ran (proving genuine elevation, not just that `schtasks` returned success):
+```powershell
+(Get-ScheduledTaskInfo -TaskName 'NGConnect Updater').LastRunTime
+```
+Expected: a timestamp within the last minute. If the button 409s as "not installed," re-check the task name matches `NGConnect Updater` exactly.
 
 - [ ] **Step 3: End-to-end smoke test**
 
