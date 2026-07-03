@@ -12,6 +12,10 @@ interface NzbResult {
   sizeBytes: number;
   pubDate: string;
   grabs: number | null;
+  imdbId: string | null;
+  tvdbId: number | null;
+  season: number | null;
+  episode: number | null;
 }
 
 type SortKey = 'title' | 'category' | 'pubDate' | 'sizeBytes' | 'grabs';
@@ -156,10 +160,17 @@ export default function SearchPage() {
     try {
       const res = await api.post('/nzbgeek/send-to-arr', {
         title: r.title, nzbUrl: r.link, pubDate: r.pubDate, target,
+        imdbId: r.imdbId, tvdbId: r.tvdbId, season: r.season, episode: r.episode,
       });
-      setRow(r.rowId, interpretPush(res.status, res.data));
+      const added = res.data?.added === true;
+      const outcome = interpretPush(res.status, res.data?.push);
+      if (outcome.state === 'grabbed') {
+        setRow(r.rowId, { state: 'grabbed', msg: added ? 'Added + Grabbed' : 'Grabbed' });
+      } else {
+        setRow(r.rowId, outcome);
+      }
     } catch (err: unknown) {
-      const status = (err as { response?: { status?: number; data?: unknown } })?.response?.status;
+      const status = (err as { response?: { status?: number } })?.response?.status;
       const data = (err as { response?: { data?: unknown } })?.response?.data;
       setRow(r.rowId, interpretPush(status ?? 0, data));
     }
@@ -169,7 +180,7 @@ export default function SearchPage() {
     setRow(r.rowId, { state: 'sending' });
     try {
       await api.post('/nzbgeek/send-to-sab', { title: r.title, nzbUrl: r.link });
-      setRow(r.rowId, { state: 'grabbed', msg: 'Sent to SAB (no auto-import)' });
+      setRow(r.rowId, { state: 'grabbed', msg: 'Sent to SAB' });
     } catch {
       setRow(r.rowId, { state: 'error', msg: 'SAB error' });
     }
@@ -251,7 +262,7 @@ export default function SearchPage() {
                   <td>
                     {(() => {
                       const g = grab[r.rowId]?.state ?? 'idle';
-                      if (g === 'grabbed') return <span className="badge badge-success" title={grab[r.rowId]?.msg}>Grabbed</span>;
+                      if (g === 'grabbed') return <span className="badge badge-success" title={grab[r.rowId]?.msg}>{grab[r.rowId]?.msg || 'Grabbed'}</span>;
                       if (g === 'sending') return <span className="placeholder">Sending…</span>;
 
                       // Resolve target: filter first, then result category band.
