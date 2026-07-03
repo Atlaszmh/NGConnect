@@ -1,278 +1,318 @@
 # Search Enhancements — Design Spec
 
 **Date:** 2026-07-02
-**Status:** Approved
+**Status:** Approved (pending spec review)
 **Author:** Zach + Claude
 
 ## Problem
 
 The manual search page ([client/src/pages/SearchPage.tsx](../../../client/src/pages/SearchPage.tsx))
-queries NZBGeek via the Newznab API and shows only **Name, Category, Size,
-Age**. When multiple releases match (e.g. a dozen versions of the same movie at
-different sizes/qualities), there's not enough information to pick the best one,
-and the columns aren't sortable. The most useful signal for "which release is
-good" — **grabs** (how many people downloaded it) — and **files** count are
-already present in the API response but are discarded.
+has two shortcomings:
+
+1. **Too little information to choose a release.** It shows only Name, Category,
+   Size, Age, and nothing is sortable. When a dozen versions of the same title
+   match, there's no way to rank them — in particular **grabs** (how many people
+   downloaded a release), the best "is this one good" signal, isn't shown.
+2. **Grabs go straight to SABnzbd and never get imported.** The "grab" button
+   calls `POST /nzbgeek/send-to-sab`, which pushes the NZB directly to SAB via
+   `mode=addurl`. Sonarr/Radarr only auto-import (rename → move into library →
+   refresh Plex) downloads **they themselves initiated** (matched by SAB's
+   `nzo_id`). Anything pushed straight to SAB is never imported and never
+   refreshes Plex — it just piles up as untracked files in
+   `R:\Torrents\ModernTorrents\completed`. (SAB-side sorting is disabled; the
+   arr apps must own naming/importing.)
 
 ## Goals
 
-- Show, per result: **Name, Category, Age, Size, Files, Grabs**.
-- Make **every** column sortable (click header to sort; click again to reverse).
-- Surface data that's already in the Newznab response but currently ignored
-  (grabs, files, accurate date), so the user can rank releases themselves.
+- Show, per result: **Name, Category, Age, Size, Grabs**, every column sortable
+  (click header to sort; click again to reverse).
+- Route the grab through **Sonarr (TV)** or **Radarr (movies)** so their
+  Completed Download Handling runs and Plex refreshes — instead of pushing
+  straight to SAB.
+- Keep the existing search UX fully intact (free-text NZBGeek search, category
+  filter, results table, manual per-release selection).
+- Surface the arr's decision clearly: **Grabbed** vs **Rejected: \<reason\>**.
 
 ## Non-Goals
 
-- Adding social signals from the NZBGeek *website* (comment counts, thumbs
-  up/down). Those are not part of the Newznab search API and would be blank.
-- Server-side / indexer-side sorting or paging. Sorting is done client-side on
-  the fetched result set.
-- Changing how downloads are sent to SABnzbd (the existing "Send to SABnzbd"
-  action is preserved as-is).
-- Saved searches, filters, or multi-indexer support.
+- A **Files** column — NZBGeek's search API does not return a file count (see
+  Real-API Findings); it only appears on the NZBGeek website. Not shown.
+- Thumbs/comments columns — available via the API but the user chose the leaner
+  five-column set; not shown. (Trivially addable later.)
+- **Auto-adding** unknown series/movies to Sonarr/Radarr. `release/push` only
+  succeeds for content already in the library; when it isn't, we surface the
+  rejection so the user knows to add it first. Auto-add is a future enhancement.
+- Server-side/indexer-side sorting or paging. Sorting is client-side over the
+  fetched set.
+- A prettier category label like "Movies > UHD" beyond a simple code→label map.
+
+## Real-API Findings (verified live, 2026-07-02)
+
+These drove the design and are **confirmed against the running NZBGeek API**
+(the arrs were probed too but are `localhost`-bound and unreachable from the dev
+PC — see Verification):
+
+- **`grabs` (and `usenetdate`, `comments`, `thumbsup/down`) require
+  `&extended=1`.** A plain `t=search` returns only `category, size, guid,
+  coverurl` — no grabs, no age. This is the single most important fix: the route
+  MUST send `extended=1`.
+- **`files` is NOT returned** by `t=search`, even with `extended=1` (confirmed
+  across many results). The Files column is therefore impossible from this API.
+- Newznab JSON shape (confirmed): `attr` is an array whose each element is
+  `{ "@attributes": { "name", "value" } }` (nested, not flat); `enclosure` is
+  `{ "@attributes": { url, length, type } }` with `length` = size in bytes;
+  `guid` is a plain **string**; each item carries multiple `category` attrs
+  (e.g. `2000` and `2045`) giving the numeric category codes used for routing.
+- A **real captured `extended=1` response** (keys redacted) is the parser's test
+  fixture — see Testing Strategy.
 
 ## Context (current state)
 
 - **Client** [SearchPage.tsx](../../../client/src/pages/SearchPage.tsx): calls
-  `GET /api/nzbgeek/search?q=&cat=`, then reads
-  `res.data?.channel?.item || res.data?.item` and renders a table. It already
-  has `formatSize` and `formatAge` helpers. The `NzbResult` type declares an
-  `attr?: {name,value}[]` array but never reads it.
-- **Server** [nzbgeek.ts](../../../server/src/routes/nzbgeek.ts): the `/search`
-  route proxies to `${nzbgeek.baseUrl}/api?t=search&o=json&...` and returns the
-  **raw Newznab JSON** verbatim. `limit` defaults to `'50'`.
-- **Confirmed:** `/api/nzbgeek/search` is consumed **only** by SearchPage
-  (verified by grep across `client/`), so changing its response shape is safe.
-  The `send-to-sab` POST takes `{ title, nzbUrl }` where `nzbUrl` is the result's
-  `link` — the normalized shape preserves `link`, so that path is unaffected.
-- **Newznab response quirks** the parser must absorb (the `@attributes` nesting
-  is the standard XML→JSON convention and is **confirmed in this repo**: the
-  existing SearchPage already reads `enclosure?.['@attributes']?.length`):
-  - Results live at `channel.item` (sometimes just `item`); a single result may
-    be an object rather than a one-element array.
-  - Extended fields come as `newznab:attr` → JSON `attr`, an array whose each
-    element is `{ "@attributes": { "name": "...", "value": "..." } }` (name and
-    value are **nested under `@attributes`**, not flat). For a single attr, `attr`
-    may be a lone such object instead of an array.
-  - `enclosure` is likewise `{ "@attributes": { url, length, type } }`; size is
-    `enclosure["@attributes"].length`, or an attr named `size`, or a top-level
-    `size`.
-  - `guid` is often `{ "@attributes": { isPermaLink }, "text": "<id>" }` (or a
-    plain string on some indexers) — not guaranteed to be a bare string.
-  - `grabs`, `files`, `usenetdate` are standard Newznab attrs but any of them
-    can be absent for a given result/indexer.
-  - **Fixtures for the parser tests MUST be captured from a real NZBGeek
-    `o=json` response** (API key redacted), not hand-invented — this shape was
-    the one place the original design guessed wrong, so the tests must be
-    grounded in reality (see Testing Strategy).
-- **Testing convention:** the server unit-tests pure functions with vitest
-  (`parseVpnStatus`, `readDeployStatus`, `classifyTriggerResult`). This feature
-  follows that pattern.
+  `GET /api/nzbgeek/search`, reads `res.data?.channel?.item`, renders a table,
+  and the grab button posts to `/nzbgeek/send-to-sab`. Has `formatSize` /
+  `formatAge` helpers. `/nzbgeek/search` is consumed **only** here (verified).
+- **Server** [nzbgeek.ts](../../../server/src/routes/nzbgeek.ts): `/search`
+  proxies to NZBGeek and returns raw JSON; `limit` defaults to `'50'`;
+  `send-to-sab` appends the NZBGeek key to the NZB url then calls SAB `addurl`.
+- **Arr pattern that works:** [TvShowsPage.tsx](../../../client/src/pages/TvShowsPage.tsx)
+  posts `/sonarr/command` → [sonarr.ts](../../../server/src/routes/sonarr.ts) →
+  [proxy.ts](../../../server/src/services/proxy.ts) forwards to
+  `${config.sonarr.url}/api/v3/...` with `X-Api-Key`. `config.sonarr`,
+  `config.radarr`, `config.nzbgeek` all hold `{ url, apiKey }` (nzbgeek:
+  `{ apiKey, baseUrl }`). The generic proxy can't inject the **NZBGeek** key
+  into an arr call, which is why the grab needs a dedicated endpoint.
+- **Testing convention:** server unit-tests pure functions with vitest
+  (`parseVpnStatus`, `readDeployStatus`). This feature follows that pattern.
 
 ## Architecture Overview
 
-Normalize the messy Newznab response **on the server** into a clean, typed
-array; the client renders and sorts that array. Two small units:
+Two parts, each with clean unit boundaries:
 
-1. **`parseNewznabResults(raw)`** — a pure function (new
-   `server/src/services/newznab.ts`) that turns the raw Newznab JSON into
-   `NzbResult[]`. All the quirk-handling lives here and is unit-tested.
-2. **SearchPage table + client-side sort** — consumes the clean array, renders
-   the six columns, and sorts the in-memory result set on header click.
+**Part A — richer results:** a pure server function `parseNewznabResults(raw)`
+(new `server/src/services/newznab.ts`) normalizes the Newznab JSON into a typed
+`NzbResult[]`; the `/search` route sends `extended=1` and returns `{ results }`;
+SearchPage renders and client-side-sorts the array.
 
-The two communicate through one well-defined interface: the `NzbResult[]` JSON
-the `/search` route returns. The React component knows nothing about Newznab
-attrs; the parser knows nothing about the UI.
+**Part B — arr-routed grab:** a new `POST /nzbgeek/send-to-arr` endpoint hands a
+release to Sonarr/Radarr via `release/push` (NZBGeek key injected server-side);
+SearchPage picks the target from the category and shows the arr's decision. The
+old `/send-to-sab` stays as a labeled escape hatch.
 
-**Why server-side normalization:** it centralizes the fragile Newznab parsing in
-one testable pure function (matching the repo's test style), keeps the component
-simple, and means the client type is clean. Parsing in the component would put
-untested, fragile logic in the UI (there is no client test framework).
-
-**Why client-side sort:** the fetched set (≤100 rows) sorts instantly in the
-browser, uniformly across all columns, with no re-fetch; Newznab's own sort
-support is limited and inconsistent across fields.
+The parser knows nothing about the UI; the route knows nothing about sorting;
+the grab endpoint returns the raw arr decision so the client owns presentation.
 
 ## Component 1: `server/src/services/newznab.ts`
-
-Exports the result type and the parser.
 
 ```ts
 export interface NzbResult {
   guid: string;
   title: string;
-  link: string;          // NZB URL used by send-to-sab
-  category: string;      // raw category text/code, best-effort
-  sizeBytes: number;     // 0 if unknown
-  pubDate: string;       // ISO date string; '' if unknown
-  files: number | null;  // null if the indexer didn't report it
-  grabs: number | null;  // null if the indexer didn't report it
+  link: string;            // NZB url; the NZBGeek key is appended server-side later
+  category: string;        // display label, best-effort
+  categoryId: number | null; // primary numeric Newznab category code, for routing
+  sizeBytes: number;       // 0 if unknown
+  pubDate: string;         // ISO date string; '' if unknown
+  grabs: number | null;    // null if absent
 }
 
 export function parseNewznabResults(raw: unknown): NzbResult[];
 ```
 
-**Behavior:**
-- Locate the items array from `raw.channel.item` or `raw.item`; if it's a single
-  object, wrap it in an array; if absent/not-an-object, return `[]`.
-- **`attrMap(item)` helper** → `Map<string,string>` keyed by attr name: iterate
-  `item.attr` (normalize a lone object to a one-element array), and for each
-  element read the name/value from `el["@attributes"]` (the confirmed nested
-  shape). As cheap insurance against indexer variation, also fall back to a flat
-  `el.name`/`el.value` if `@attributes` is absent. Keys: `grabs`, `files`,
-  `usenetdate`, `size`, `category`, …
-- **`asString(x)` / guid helper**: `guid` may be a string OR an object like
-  `{ "@attributes": {...}, "text": "<id>" }`. Extract the string form: if
-  `item.guid` is a string use it; else use `item.guid.text` (or
-  `item.guid["#text"]`); else fall back to `link`. The result MUST be a usable
-  string (used as the React `key` and in send-to-sab).
-- Field extraction (all defensive; bad/missing → the documented default):
-  - `guid`: per the guid helper above; fall back to `link`.
+**Behavior (pure, never throws; bad/missing → documented default):**
+- Items from `raw.channel.item` or `raw.item`; single object → wrap; else `[]`.
+- **`attrMap(item)`**: iterate `item.attr` (normalize a lone object to a
+  one-element array); read name/value from `el["@attributes"]` (confirmed
+  nested shape), with a flat `el.name`/`el.value` fallback as insurance. Note a
+  key like `category` can appear **multiple times** — keep the numeric codes as
+  a list for routing.
+- **`asString(x)`**: returns a string for `x` that may be a string or an object
+  (`x.text` / `x["#text"]`). Used for `guid` and `link` (guid is a string in
+  practice, but stay defensive).
+- Fields:
+  - `guid`: `asString(item.guid)` → fall back to `link`. Must be a usable string
+    (React key + send-to-arr/sab).
   - `title`: `item.title` → `''`.
-  - `link`: `item.link` → `''` (reuse the same `asString` helper as `guid`, in
-    case it's an object).
-  - `category`: attr `category` → `item.category` → `''`.
-  - `sizeBytes`: `enclosure["@attributes"].length` → attr `size` →
-    `item.size`, parsed as an integer; non-numeric → `0`.
-  - `pubDate`: attr `usenetdate` → `item.pubDate`; kept as the original string
-    (the client parses it). `''` if absent.
-  - `files`: attr `files` parsed as int; missing/non-numeric → `null`.
-  - `grabs`: attr `grabs` parsed as int; missing/non-numeric → `null`.
-- **Never throws.** Any structural surprise yields `[]` or per-field defaults.
-- Items without a usable `guid` **and** `link` are skipped (can't be actioned).
+  - `link`: `asString(item.link)` → `''`.
+  - `sizeBytes`: `enclosure["@attributes"].length` → attr `size` → `item.size`,
+    parsed int; non-numeric → `0`.
+  - `pubDate`: **attr `usenetdate`** → `item.pubDate`; original string, `''` if
+    absent. (usenetdate is the accurate upload time and needs `extended=1`.)
+  - `grabs`: attr `grabs` parsed int; missing/non-numeric → `null`.
+  - `categoryId`: the primary numeric category code — from the item's `category`
+    attrs/elements, choose the **most specific** (largest) code so e.g. `2045`
+    (Movies-UHD) wins over `2000`; `null` if none numeric.
+  - `category`: display label — map `categoryId` via a small code→label table
+    (extends the client's existing `CATEGORIES`), falling back to the raw
+    text/code. (The label map may live client-side; the server guarantees
+    `categoryId` + a best-effort string.)
+- Items with no usable `guid` **and** no `link` are skipped (not actionable).
 
-**Unit tests** (`server/src/services/newznab.test.ts`). **The primary fixture
-MUST be a real captured NZBGeek `o=json` response** (see Testing Strategy) so the
-`@attributes` shape is validated against reality, not re-guessed. Cases:
-- Real captured response → correct count and field values (grabs/files as
-  numbers from `attr[i]["@attributes"]`, size parsed from
-  `enclosure["@attributes"].length`, guid extracted to a string).
-- Single-item response (`item` is an object, not an array) → one result.
-- Single-attr item (`attr` is one `@attributes` object, not an array) → parsed.
-- Missing `grabs`/`files` attrs → `null` (not `0`, so sorting can push them to
-  the bottom).
-- Size from an attr named `size` when no enclosure is present.
-- guid given as `{ "@attributes": {...}, "text": "abc" }` → `guid === 'abc'`.
-- Malformed input (`null`, `{}`, `{channel:{}}`, a string) → `[]`, no throw.
+**Unit tests** (`server/src/services/newznab.test.ts`): the **primary fixture is
+the real captured `extended=1` response** (redacted). Cases: real response →
+correct count + grabs/size/usenetdate/categoryId values; single-item response;
+single-attr object; missing grabs → `null`; multiple category attrs → most
+specific `categoryId`; size from attr when no enclosure; malformed input
+(`null`, `{}`, string) → `[]`.
 
 ## Component 2: `nzbgeek.ts` `/search` route change
 
-- After `await response.json()`, call `parseNewznabResults(data)` and respond
-  `res.json({ results })` instead of the raw JSON.
-- Bump the default `limit` from `'50'` to `'100'` so client-side sorting has a
-  fuller set to rank. (Still overridable via the `limit` query param.)
-- Error handling unchanged (502 on fetch failure). If parsing yields `[]` the
-  route still returns `{ results: [] }` with 200 — an empty result set is not an
-  error.
+- Add `url.searchParams.set('extended', '1')` (**required** for grabs/age).
+- After `await response.json()`, return `res.json({ results: parseNewznabResults(data) })`.
+- Bump default `limit` `'50'` → `'100'`.
+- Error handling unchanged (502 on fetch failure); `[]` results still 200.
 
-## Component 3: SearchPage — columns + client-side sort
+## Component 3: `nzbgeek.ts` new `POST /nzbgeek/send-to-arr`
 
-- Replace the local `NzbResult` interface and the `res.data?.channel?.item`
-  guessing with: `const results = res.data?.results ?? []` typed to the new
-  shape (a local interface mirroring the server's `NzbResult`).
-- **`SortKey`** is exactly `'title' | 'category' | 'pubDate' | 'sizeBytes' |
-  'files' | 'grabs'`. The **Age** column header maps to the `pubDate` key (Age
-  is derived from `pubDate`, it has no field of its own); the other five headers
-  map to their like-named keys. This keeps headers and sortable keys in lockstep.
-- Columns: **Name, Category, Age, Size, Files, Grabs**, then the existing
-  **Action** (Send to SABnzbd) column. `Files`/`Grabs` render `--` when `null`.
-- **Sort state:** `{ key: SortKey | null; dir: 'asc' | 'desc' }`, initially
-  `{ key: null }` so the indexer's returned order shows first. Clicking a header:
-  - if it's a new column → set `key` to it with a sensible initial direction
-    (text columns asc; numeric columns — Size/Files/Grabs/Age — desc, since
-    "most/newest first" is the common intent);
-  - if it's the active column → toggle `dir`.
-  - A small arrow (▲/▼) on the active header shows the direction.
-- **Sort semantics** (a pure `sortResults(results, key, dir)` helper in the
-  component):
-  - Numeric keys sort by number: `sizeBytes`, `files`, `grabs`, and `Age`
-    (compare by `Date.parse(pubDate)`; older = larger age).
-  - `Name`/`Category` sort with `localeCompare` (case-insensitive).
-  - **Missing values sort last** regardless of direction: `null` files/grabs,
-    `sizeBytes === 0`, and unparseable/empty `pubDate` always sink to the
-    bottom, so a real ranking isn't polluted by unknowns at the top. (Note:
-    `sizeBytes === 0` intentionally conflates "genuinely 0 bytes" with "unknown
-    size" — acceptable, since a real release is never 0 bytes.)
-  - **Stable tie-break:** when two rows compare equal on the active key, preserve
-    their original (indexer) order. Implement by carrying each row's original
-    index and using it as the secondary comparator, so sorting is deterministic
-    across browsers rather than relying on `Array.sort` stability alone.
-  - Sorting is applied to a copy (never mutate state); rendering maps the sorted
-    array. Re-sorting is pure/derived from `results` + sort state.
-- `formatSize` stays. `formatAge` is extended to also express months for old
-  releases (e.g. "2 mths") to match the screenshot; the underlying sort still
-  uses the raw timestamp, so display formatting can't affect ordering.
+- Body `{ title, nzbUrl, pubDate, target }`, `target ∈ {'sonarr','radarr'}`.
+- Build `downloadUrl` by appending the NZBGeek key exactly like `send-to-sab`
+  (`nzbUrl.includes('apikey') ? nzbUrl : ${nzbUrl}&apikey=${config.nzbgeek.apiKey}`).
+- Pick `{ url, apiKey }` from `config.sonarr` or `config.radarr` by `target`
+  (400 if target is neither).
+- `POST ${base.url}/api/v3/release/push` with header `X-Api-Key: ${base.apiKey}`,
+  `Content-Type: application/json`, body:
+  ```json
+  { "title": "<title>", "downloadUrl": "<downloadUrl>",
+    "protocol": "usenet", "publishDate": "<pubDate || new Date().toISOString()>" }
+  ```
+  `protocol: "usenet"` is the current-v3 value; **unverified against the live
+  instance** (arrs unreachable from dev PC) — the route returns the raw arr
+  response + upstream status so a wrong value surfaces as a visible error rather
+  than a silent failure, and the live grab test (Verification) confirms it.
+- Respond with the arr's status code and JSON body (the decision:
+  `approved` / `rejected` / `rejections[]`), so the client can render outcome.
+- Plain `fetch` + `try/catch` + 502 on connection failure, matching the file's
+  style. No API keys sent to the browser. (If any wildcard route is added, use
+  Express 5 `/*path` form per CLAUDE.md — none is needed here.)
+
+## Component 4: `/nzbgeek/send-to-sab` (unchanged, kept as fallback)
+
+Retained exactly as-is for the escape-hatch case (grabbing something not in the
+libraries, or Audio). The UI labels it as **not** auto-importing.
+
+## Component 5: SearchPage — columns, sort, and arr-routed grab
+
+**Data:** `const results = res.data?.results ?? []` typed to a local interface
+mirroring `NzbResult`.
+
+**Columns:** Name, Category, Age, Size, Grabs, then Action. Grabs renders `--`
+when `null`. `formatSize` stays; `formatAge` extended to show months for old
+releases (display only — sort uses the raw timestamp).
+
+**Sorting (client-side):**
+- `SortKey = 'title' | 'category' | 'pubDate' | 'sizeBytes' | 'grabs'`. The Age
+  header maps to `pubDate`; the other headers map to like-named keys.
+- State `{ key: SortKey | null; dir: 'asc'|'desc' }`, initially `{ key: null }`
+  so the indexer's order shows first. New column → set key (text asc; numeric —
+  Size/Grabs/Age — desc first); same column → toggle dir. Active header shows ▲/▼.
+- `sortResults(results, key, dir)` (pure): numeric keys (`sizeBytes`, `grabs`,
+  `pubDate` via `Date.parse`) compare numerically; `title`/`category` use
+  `localeCompare` (case-insensitive). **Missing values sort last** regardless of
+  direction (`null` grabs, `sizeBytes===0`, empty/unparseable `pubDate`).
+  **Stable tie-break:** carry each row's original index as the secondary
+  comparator. Sort a copy; never mutate state.
+
+**Grab routing (replaces the single SAB button):**
+- Determine target band from the category code: **TV `5000–5999` → sonarr**,
+  **Movies `2000–2999` → radarr**, **Audio `3000–3999` → SAB fallback**.
+  Precedence: if the **selected category filter** is unambiguous (a specific TV
+  or Movies code), use it; else use the **result's `categoryId`**; if still
+  ambiguous (e.g. filter = "All" and `categoryId` null/other), render **two
+  small buttons — "Sonarr" and "Radarr"** — for the user to choose.
+- Grab calls `api.post('/nzbgeek/send-to-arr', { title: r.title, nzbUrl: r.link,
+  pubDate: r.pubDate, target })`.
+- A secondary, **less-prominent "→ SAB"** action (old `send-to-sab` path) is
+  always available as the escape hatch, with a tooltip/note that SAB-direct
+  grabs won't auto-import.
+
+**Result feedback (per row; replaces the fire-and-forget `sent` set):**
+- Track per-guid state: `idle | sending | grabbed | rejected | error` (+ a
+  message). Interpreting the arr response: **approved** (`approved === true`, or
+  a decision with no `rejections`) → green **"Grabbed"**; **rejected** → red
+  **"Rejected: \<first rejection reason\>"** from `rejections[].reason` (this is
+  the expected, informative case when the title doesn't match a monitored
+  series/movie); non-2xx/`502`/network → **"Error"** with a short message.
+- Because `release/push`'s exact success/rejection shape is unverified live, the
+  client reads it defensively: treat `approved === true` OR (2xx with an empty/
+  absent `rejections`) as grabbed; any `rejections` array with entries as
+  rejected; anything else as error. The live test will confirm these fields.
 
 ## Data Flow
 
-`Search` click → `GET /api/nzbgeek/search?q&cat&limit=100` → route fetches
-Newznab JSON → `parseNewznabResults` → `{ results: NzbResult[] }` → SearchPage
-stores `results` → renders table in indexer order → user clicks a header →
-`sortResults` returns a sorted copy → table re-renders. "Send to SABnzbd" posts
-the row's `link` exactly as today.
+**Search:** click → `GET /api/nzbgeek/search?q&cat&limit=100&extended=1` → route
+→ `parseNewznabResults` → `{ results }` → table (indexer order) → header click →
+`sortResults` copy → re-render.
+
+**Grab (arr):** button → `POST /nzbgeek/send-to-arr {title,nzbUrl,pubDate,target}`
+→ server appends NZBGeek key → `POST arr /api/v3/release/push` (X-Api-Key) → arr
+decision returned → client shows Grabbed/Rejected. On approval the arr grabs via
+its own SAB client (correct category) → CDH → import → Plex refresh.
+
+**Grab (SAB fallback):** button → `POST /nzbgeek/send-to-sab` exactly as today.
 
 ## Error Handling
 
 | Case | Behavior |
 |---|---|
-| Newznab fetch fails | Route returns 502 (unchanged); client shows no results. |
-| Newznab returns unparseable/odd JSON | `parseNewznabResults` returns `[]`; route returns `{ results: [] }` (200); client shows the existing "No results" message. |
-| A result missing grabs/files | Field is `null`; renders `--`; sorts to the bottom. |
-| A result missing guid+link | Skipped by the parser (not actionable). |
-| Empty query | Client no-ops (unchanged); route still 400s if hit directly. |
+| NZBGeek fetch fails | `/search` 502; client shows no results. |
+| NZBGeek odd/empty JSON | parser → `[]`; 200 `{results:[]}`; "No results". |
+| Result missing grabs | `null` → renders `--`, sorts last. |
+| Result missing guid+link | skipped by parser. |
+| `send-to-arr` bad `target` | 400. |
+| arr unreachable | 502; row shows "Error". |
+| arr rejects (not in library / unmonitored) | 2xx decision with `rejections`; row shows "Rejected: \<reason\>". |
+| `protocol` value wrong (if it is) | arr returns an error body; route passes it through; row shows "Error" with the message — caught in the live test, then adjust. |
 
 ## Testing Strategy
 
-- **Capture a real fixture FIRST (gates the parser work).** Before writing the
-  parser, obtain one real NZBGeek `o=json` response and save it (API key/URL
-  redacted) as a test fixture, e.g. `server/src/services/__fixtures__/
-  nzbgeek-search.json`. This is the source of truth for the `@attributes` shape.
-  Ways to get it: run the dev PC's server with a configured `.env` and
-  `curl 'http://localhost:3001/api/...'`; or capture directly from
-  `https://api.nzbgeek.info/api?t=search&o=json&q=<term>&apikey=<key>`; or have
-  the operator paste one sample. The `@attributes` nesting is already confirmed
-  by the repo's existing `enclosure['@attributes']` usage, but the fixture
-  locks the parser to reality and prevents a repeat of the original shape guess.
-  **Redaction (required):** the API key appears not just in the request URL but
-  **inside each item's `link` and `enclosure["@attributes"].url`** (Newznab
-  embeds `&apikey=<key>` there). Before committing the fixture, replace every
-  occurrence of the real key with `REDACTED` across the whole file. The parser
-  only needs the JSON *shape*, so redacted URLs are fine for tests.
-- **Parser (real logic):** vitest unit tests using the captured fixture plus the
-  synthetic edge cases (single-item, single-attr, missing grabs/files, guid
-  object, malformed input), added to the existing server suite
+- **Capture already done:** a real NZBGeek `extended=1` response was captured
+  during design; **redact every apikey** (in the request URL AND in each item's
+  `link` / `enclosure["@attributes"].url` — Newznab embeds `&apikey=`) and save
+  as `server/src/services/__fixtures__/nzbgeek-search.json`, the parser's
+  ground-truth fixture.
+- **Parser:** vitest tests over the fixture + synthetic edge cases
   (`npm test` in `server/`).
-- **Route:** covered indirectly; the meaningful logic is the parser. A light
-  check that the route returns `{ results }` can be manual/e2e.
-- **Client:** no client test framework, so verify by `npm run build` (typecheck)
-  plus a manual search — confirm the six columns populate, header clicks sort
-  (including reverse and the missing-values-last behavior), and Send to SABnzbd
-  still works. Consistent with the repo's approach.
+- **`send-to-arr` route:** the meaningful branching (key injection, target
+  selection, pass-through) is thin; a light manual/e2e check suffices. Optionally
+  a small unit test of a pure `buildReleasePushUrl(target, config)`-style helper
+  if extracted.
+- **Client:** no client test framework → `npm run build` (typecheck) + manual.
+- **Live grab test (USER-RUN, on the server PC where the arrs are local):**
+  1. `npm run dev` (or the deployed build). ProtonVPN connected + SAB un-paused.
+  2. Search a show/movie **in** your Sonarr/Radarr library → Grab → confirm it
+     appears in the arr's Activity/Queue, downloads via SAB under tv/movies,
+     imports into the library, and Plex refreshes.
+  3. Search something **not** in the library → confirm a clear
+     "Rejected: \<reason\>" (not a silent failure).
+  4. Confirm no API keys appear in the browser Network tab.
+  5. If the grab errors on `protocol`, report the arr's error body — we switch
+     the value (e.g. capitalization) and you re-test.
 
 ## Risks / Open Questions
 
-- **Field availability varies by indexer/result.** `grabs`/`files`/`usenetdate`
-  are standard Newznab attrs and NZBGeek supplies them, but the parser treats
-  every field as optional so a missing one degrades to `--`/bottom-sort rather
-  than breaking. Low risk.
-- **Category display.** The API may return a numeric code, a text label, or
-  both. The parser keeps the best-effort text; a nicer code→label mapping (like
-  the screenshot's "Movies > UHD") is a possible later polish but is **not** in
-  scope here (YAGNI) — we show what the API gives.
-- **Response-shape change is a breaking change** for the `/search` endpoint, but
-  the only consumer is SearchPage (verified), and both change together in this
-  feature.
+- **`release/push` payload unverified live** (protocol casing, exact rejection
+  shape). Mitigated by pass-through of the raw arr response + the user-run live
+  test. This is the one integration point we can't test from the dev PC.
+- **Field availability varies by indexer.** Every field is optional in the
+  parser; a missing one degrades to `--`/bottom-sort. `extended=1` is required
+  and now always sent.
+- **`/search` response-shape change** is breaking, but SearchPage is the only
+  consumer (verified) and both change together.
+- **Category routing edge cases** (multi-category items, "All" filter) are
+  handled by the most-specific-code rule plus the two-button fallback.
 
 ## Files Touched
 
 **New:**
-- `server/src/services/newznab.ts` — `NzbResult` type + `parseNewznabResults`.
+- `server/src/services/newznab.ts` — `NzbResult` + `parseNewznabResults`.
 - `server/src/services/newznab.test.ts` — parser unit tests.
-- `server/src/services/__fixtures__/nzbgeek-search.json` — a **real** captured
-  NZBGeek `o=json` response (key/URL redacted), the parser's ground-truth fixture.
+- `server/src/services/__fixtures__/nzbgeek-search.json` — real captured
+  `extended=1` response (keys redacted).
 - `docs/superpowers/specs/2026-07-02-search-enhancements-design.md` (this file).
 
 **Modified:**
-- `server/src/routes/nzbgeek.ts` — `/search` returns `{ results }`; `limit` 50→100.
-- `client/src/pages/SearchPage.tsx` — consume `results`; add Files/Grabs columns;
-  sortable headers + `sortResults`; extend `formatAge`.
+- `server/src/routes/nzbgeek.ts` — `/search` adds `extended=1`, returns
+  `{ results }`, `limit` 50→100; new `POST /send-to-arr`; `send-to-sab` kept.
+- `client/src/pages/SearchPage.tsx` — consume `results`; Name/Category/Age/Size/
+  Grabs sortable columns; arr-routed grab with Sonarr/Radarr/SAB targeting;
+  Grabbed/Rejected/Error feedback; extend `formatAge`.
