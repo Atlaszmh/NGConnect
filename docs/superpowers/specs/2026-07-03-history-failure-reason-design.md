@@ -52,17 +52,31 @@ A single field threaded through the existing pipeline.
 **Client — `client/src/pages/DownloadsPage.tsx`:**
 - Add `reason: string | null` to the client `HistoryItem` (mirror server).
 - In the failed-row rendering, when `item.reason` is present, render it as a
-  small muted/red line beneath the title in the Title cell, e.g.:
+  small muted/red line beneath the title in the Title cell:
   ```tsx
   <td className="name-cell">
     {item.title}
-    {item.event === 'failed' && item.reason && (
-      <div className="history-fail-reason">{item.reason}</div>
-    )}
+    {item.reason && <div className="history-fail-reason">{item.reason}</div>}
   </td>
   ```
-  Use an existing muted/danger text style if one fits; otherwise a minimal inline
-  style (small, muted-red) is acceptable — no need for a new CSS system.
+  (`reason` is `null` for imported rows server-side, so guarding on `item.reason`
+  alone is sufficient.)
+
+**Client CSS — `client/src/index.css` (REQUIRED, not optional):**
+- `.name-cell` is built for single-line truncation (`white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 400px`). A child `<div>`
+  **inherits `white-space: nowrap`**, so without an override the reason renders
+  as one clipped/ellipsized line instead of wrapping under the title. Add a rule
+  that resets wrapping and uses the existing danger color:
+  ```css
+  .history-fail-reason {
+    white-space: normal;
+    color: var(--color-danger);
+    font-size: 0.8em;
+    margin-top: 3px;
+  }
+  ```
+  This lets the reason wrap within the cell (the `<td>` grows in height to fit).
 
 ## Data Flow
 
@@ -86,7 +100,12 @@ Unchanged from the history feature, plus one field: arr `/history` record →
     `sizeBytes: 0` (from `"0"`), `title` falling back to `sourceTitle` (this raw
     sample has no `series`/`episode` include object). Commit the record as
     `server/src/services/__fixtures__/sonarr-history-failed.json` (no redaction
-    needed — nothing secret).
+    needed — nothing secret). **Note:** the production route DOES pass
+    `includeSeries=true&includeEpisode=true`, so real production records carry a
+    `series`/`episode` object and get proper `Series SxxExx` titles — the fixture
+    intentionally exercises reason/size extraction, not title assembly (which the
+    existing synthetic Sonarr test already covers). Don't "fix" the fixture's
+    sourceTitle-fallback expectation.
   - **Synthetic:** an imported record → `reason: null`; a failed record with no
     `data.message` → `reason: null`.
 - **Client:** `npm run build` (typecheck) + the user-run check.
@@ -107,3 +126,5 @@ Unchanged from the history feature, plus one field: arr `/history` record →
 - `server/src/services/arrHistory.test.ts` — fixture + reason cases.
 - `client/src/pages/DownloadsPage.tsx` — `reason` in the type; inline reason on
   failed rows.
+- `client/src/index.css` — add the `.history-fail-reason` rule (reset the
+  inherited `white-space: nowrap` so the reason wraps).
