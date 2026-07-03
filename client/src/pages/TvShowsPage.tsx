@@ -96,6 +96,8 @@ export default function TvShowsPage() {
 
   const searchForShow = async () => {
     if (!addQuery.trim()) return;
+    setAddState({});
+    setSearchResults([]);
     setAddSearching(true);
     try {
       const res = await api.get('/sonarr/series/lookup', {
@@ -134,7 +136,7 @@ export default function TvShowsPage() {
       <div className="page-header">
         <h2>TV Shows</h2>
         <div className="header-actions">
-          <button onClick={() => setShowAddModal(true)} className="btn-primary">
+          <button onClick={() => { setShowAddModal(true); setAddState({}); setSearchResults([]); setAddQuery(''); }} className="btn-primary">
             <Plus size={16} /> Add Show
           </button>
           <button className="btn-icon" onClick={fetchSeries} title="Refresh">

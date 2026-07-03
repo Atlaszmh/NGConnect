@@ -17,6 +17,8 @@ interface Movie {
   imdbId?: string;
 }
 
+type AddState = 'idle' | 'adding' | 'added' | 'already' | 'error';
+
 export default function MoviesPage() {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,7 +31,6 @@ export default function MoviesPage() {
   const [addQuery, setAddQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Movie[]>([]);
   const [addSearching, setAddSearching] = useState(false);
-  type AddState = 'idle' | 'adding' | 'added' | 'already' | 'error';
   const [addState, setAddState] = useState<Record<number, AddState>>({});
 
   useEffect(() => {
@@ -62,6 +63,8 @@ export default function MoviesPage() {
 
   const searchForMovie = async () => {
     if (!addQuery.trim()) return;
+    setAddState({});
+    setSearchResults([]);
     setAddSearching(true);
     try {
       const res = await api.get('/radarr/movie/lookup', {
@@ -112,7 +115,7 @@ export default function MoviesPage() {
       <div className="page-header">
         <h2>Movies</h2>
         <div className="header-actions">
-          <button onClick={() => setShowAddModal(true)} className="btn-primary">
+          <button onClick={() => { setShowAddModal(true); setAddState({}); setSearchResults([]); setAddQuery(''); }} className="btn-primary">
             <Plus size={16} /> Add Movie
           </button>
           <button className="btn-icon" onClick={fetchMovies} title="Refresh">
