@@ -33,14 +33,15 @@ interface QueueSlot {
   sizeleft: string;
 }
 
-interface HistorySlot {
-  nzo_id: string;
-  name: string;
-  status: string;
-  size: string;
-  category: string;
-  completed: number;
-  fail_message: string;
+interface HistoryItem {
+  id: string;
+  source: 'radarr' | 'sonarr';
+  kind: 'movie' | 'tv';
+  title: string;
+  event: 'imported' | 'failed';
+  quality: string | null;
+  sizeBytes: number | null;
+  date: string;
 }
 
 interface QueueData {
@@ -59,6 +60,23 @@ function formatDownloaded(totalMb: string, leftMb: string): string {
   if (downloaded >= 1024) return `${(downloaded / 1024).toFixed(1)} GB`;
   if (downloaded >= 1) return `${downloaded.toFixed(0)} MB`;
   return `${(downloaded * 1024).toFixed(0)} KB`;
+}
+
+function formatSizeBytes(bytes: number | null): string {
+  if (!bytes) return '--';
+  const gb = bytes / (1024 * 1024 * 1024);
+  return gb >= 1 ? `${gb.toFixed(1)} GB` : `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+}
+function formatAge(dateStr: string): string {
+  if (!dateStr) return '--';
+  const t = new Date(dateStr).getTime();
+  if (Number.isNaN(t)) return '--';
+  const days = Math.floor((Date.now() - t) / 86400000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return '1 day';
+  if (days < 60) return `${days} days`;
+  const months = Math.floor(days / 30);
+  return months < 24 ? `${months} mths` : `${Math.floor(days / 365)} yrs`;
 }
 
 function SortableQueueItem({
@@ -127,7 +145,7 @@ function SortableQueueItem({
 
 export default function DownloadsPage() {
   const [queue, setQueue] = useState<QueueData | null>(null);
-  const [history, setHistory] = useState<HistorySlot[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'queue' | 'history'>('queue');
 
@@ -136,45 +154,43 @@ export default function DownloadsPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const fetchData = useCallback(async () => {
+  const fetchQueue = useCallback(async () => {
     try {
-      const [queueRes, historyRes] = await Promise.all([
-        api.get('/sabnzbd/api', { params: { mode: 'queue' } }),
-        api.get('/sabnzbd/api', { params: { mode: 'history', limit: 30 } }),
-      ]);
-      setQueue(queueRes.data?.queue || null);
-      setHistory(historyRes.data?.history?.slots || []);
+      const res = await api.get('/sabnzbd/api', { params: { mode: 'queue' } });
+      setQueue(res.data?.queue || null);
     } catch {
       setQueue(null);
-      setHistory([]);
     }
     setLoading(false);
   }, []);
 
+  const fetchHistory = useCallback(async () => {
+    try {
+      const res = await api.get('/system/history');
+      setHistory(Array.isArray(res.data?.items) ? res.data.items : []);
+    } catch {
+      setHistory([]);
+    }
+  }, []);
+
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
+    fetchQueue();
+    fetchHistory();
+    const interval = setInterval(fetchQueue, 5000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchQueue, fetchHistory]);
 
   const togglePause = async () => {
     const mode = queue?.paused ? 'resume' : 'pause';
     await api.get('/sabnzbd/api', { params: { mode } });
-    fetchData();
+    fetchQueue();
   };
 
   const deleteItem = async (nzoId: string) => {
     await api.get('/sabnzbd/api', {
       params: { mode: 'queue', name: 'delete', value: nzoId },
     });
-    fetchData();
-  };
-
-  const retryItem = async (nzoId: string) => {
-    await api.get('/sabnzbd/api', {
-      params: { mode: 'retry', value: nzoId },
-    });
-    fetchData();
+    fetchQueue();
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -207,7 +223,14 @@ export default function DownloadsPage() {
               {queue.paused ? 'Resume' : 'Pause'}
             </button>
           )}
-          <button className="btn-icon" onClick={fetchData} title="Refresh">
+          <button
+            className="btn-icon"
+            onClick={() => {
+              fetchQueue();
+              fetchHistory();
+            }}
+            title="Refresh"
+          >
             <RefreshCw size={16} />
           </button>
         </div>
@@ -250,7 +273,10 @@ export default function DownloadsPage() {
         </button>
         <button
           className={`tab ${tab === 'history' ? 'active' : ''}`}
-          onClick={() => setTab('history')}
+          onClick={() => {
+            setTab('history');
+            fetchHistory();
+          }}
         >
           History ({history.length})
         </button>
@@ -291,40 +317,33 @@ export default function DownloadsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Category</th>
+                  <th>Title</th>
+                  <th>Type</th>
+                  <th>Event</th>
+                  <th>Quality</th>
                   <th>Size</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th>Age</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map((item) => (
-                  <tr key={item.nzo_id}>
-                    <td className="name-cell">{item.name}</td>
-                    <td>{item.category}</td>
-                    <td>{item.size}</td>
+                  <tr key={item.id}>
+                    <td className="name-cell">{item.title}</td>
                     <td>
-                      {item.status === 'Completed' ? (
-                        <span className="badge badge-success">Completed</span>
-                      ) : item.status === 'Failed' ? (
+                      <span className="badge">{item.kind === 'tv' ? 'TV' : 'Movie'}</span>
+                    </td>
+                    <td>
+                      {item.event === 'imported' ? (
+                        <span className="badge badge-success">Imported</span>
+                      ) : (
                         <span className="badge badge-danger">
                           <AlertCircle size={12} /> Failed
                         </span>
-                      ) : (
-                        <span className="badge">{item.status}</span>
                       )}
                     </td>
-                    <td>
-                      {item.status === 'Failed' && (
-                        <button
-                          className="btn-sm"
-                          onClick={() => retryItem(item.nzo_id)}
-                        >
-                          Retry
-                        </button>
-                      )}
-                    </td>
+                    <td>{item.quality || '--'}</td>
+                    <td>{formatSizeBytes(item.sizeBytes)}</td>
+                    <td>{formatAge(item.date)}</td>
                   </tr>
                 ))}
               </tbody>
