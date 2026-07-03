@@ -112,8 +112,12 @@ season: number | null;   // grabbed season number (from 'S01'), else null
 episode: number | null;  // grabbed episode number (from 'E01'), else null
 ```
 Extraction (all optional/defensive):
-- `imdbId`: from the `imdb` attr via `formatImdbId(raw)` = `null` if empty, else
-  `'tt' + String(parseInt(raw,10)).padStart(7,'0')`.
+- `imdbId`: from the `imdb` attr via `formatImdbId(raw)`: `null` if empty; parse
+  `parseInt(raw,10)` and return `null` if `NaN` (defensive — NZBGeek sends bare
+  digits, but a `tt`-prefixed/garbage value must not yield `ttNaN`); else
+  `'tt' + String(n).padStart(7,'0')` (handles NZBGeek's zero-padding and 7- and
+  8-digit ids: `01375666`→`tt1375666`). `formatImdbId` is defined ONCE here in
+  `newznab.ts`; `arrAdd` receives the already-formatted `imdbId`.
 - `tvdbId`: `toInt(attr 'tvdbid')`.
 - `season`: parse the `season` attr (`'S01'`/`'1'`) → `1`; `null` if absent/NaN.
 - `episode`: parse the `episode` attr (`'E01'`/`'1'`) → `1`; `null` if absent.
@@ -124,42 +128,52 @@ confirms TV items yield `tvdbId`/`season`/`episode`).
 
 ## Component 2: `server/src/services/arrAdd.ts`
 
+**`imdbId` arrives already formatted** (`tt#######`) from the parser
+(`formatImdbId` lives in `newznab.ts`, one definition — `arrAdd` does not
+re-implement it; the route passes the parser's `imdbId` straight through).
+
 **Pure, unit-tested helpers:**
-- `formatImdbId(raw: string): string | null` (as above; shared with the parser
-  or re-exported — one definition).
-- `buildMovieAddPayload(lookupMovie, qualityProfileId, rootFolderPath)` → the
-  lookup object spread with `qualityProfileId`, `rootFolderPath`,
-  `monitored:true`, `minimumAvailability:'released'`,
-  `addOptions:{ searchForMovie:false }`.
+- `buildMovieAddPayload(lookupMovie, qualityProfileId, rootFolderPath)` → returns
+  `{ ...lookupMovie, qualityProfileId, rootFolderPath, monitored:true,
+  minimumAvailability:'released', addOptions:{ searchForMovie:false } }`.
+  **Override invariant:** spread `lookupMovie` FIRST, then the enrichment fields,
+  so our values win over any `monitored`/`addOptions`/`minimumAvailability` the
+  lookup object already carries.
 - `buildSeriesAddPayload(lookupSeries, qualityProfileId, rootFolderPath, season,
-  languageProfileId?)` → the lookup object spread with `qualityProfileId`,
-  `rootFolderPath`, `monitored:true`, `addOptions:{ searchForMissingEpisodes:
-  false }`, `languageProfileId` (only if provided), and `seasons` mapped so the
-  entry whose `seasonNumber === season` has `monitored:true` (others left as the
-  lookup returned them; if `season` is null, leave seasons untouched).
-- `firstIdOrPath` type pickers (trivial: `list[0]?.id` / `list[0]?.path`).
+  languageProfileId?)` → `{ ...lookupSeries, qualityProfileId, rootFolderPath,
+  monitored:true, addOptions:{ searchForMissingEpisodes:false }, seasons:<mapped>
+  }` plus `languageProfileId` **only if provided** (spread lookup first, then
+  enrichment). `seasons` mapping: start from `lookupSeries.seasons`; if `season`
+  is a number AND some entry has `seasonNumber === season`, set that entry
+  `monitored:true` and the rest `monitored:false`; **otherwise (season null or no
+  match) set ALL entries `monitored:true`** as a fallback so the pushed episode
+  is monitored and imports rather than silently monitoring nothing. (Season packs
+  arrive as `episode: 0` / `E00` — the season-level monitoring covers them.)
+- default pickers (trivial: `list[0]?.id` / `list[0]?.path`).
 
 **Thin orchestrators (integration — call the arr; not unit-tested, exercised in
 the live test):** each takes an arr base `{ url, apiKey }` (from `config`) and
-returns `{ added: boolean }` or throws a descriptive `Error`.
+returns `{ added: boolean }` or throws a descriptive `Error`. Idempotency uses
+the **duplicate-add error path** rather than a pre-fetch, because Radarr's
+`GET /movie?tmdbId=` filter is not reliable across versions (if ignored it
+returns the whole library → every title would read as already-present and
+NOTHING would get added — inverting the feature).
 - `ensureMovie(base, imdbId)`:
   1. `GET {url}/api/v3/movie/lookup?term=imdb:{imdbId}` → `movie = [0]`; if none,
      throw `"Movie not found for {imdbId}"`.
-  2. Already present? `GET {url}/api/v3/movie?tmdbId={movie.tmdbId}` → if the
-     array is non-empty, return `{ added:false }`.
-  3. Else fetch defaults (`qualityprofile[0].id`, `rootfolder[0].path`; throw a
-     clear error if either list is empty), `POST /api/v3/movie` with
-     `buildMovieAddPayload(...)`. Return `{ added:true }`. A "already exists"
-     add error is treated as `{ added:false }`, not a failure.
-- `ensureSeries(base, tvdbId, season)`:
+  2. Fetch defaults (`qualityprofile[0].id`, `rootfolder[0].path`; throw a clear
+     error if either list is empty).
+  3. `POST /api/v3/movie` with `buildMovieAddPayload(...)`. On 2xx → `{added:true}`.
+     On a 400 whose body signals the movie already exists (Radarr's
+     `MovieExistsValidator` / "already been added") → `{added:false}`. Any other
+     non-2xx → throw with the arr's error message.
+- `ensureSeries(base, tvdbId, season)`: same shape —
   1. `GET {url}/api/v3/series/lookup?term=tvdb:{tvdbId}` → `series = [0]`; throw
      if none.
-  2. Already present? `GET {url}/api/v3/series` → if any has `tvdbId === tvdbId`,
-     return `{ added:false }`.
-  3. Else defaults + optional `languageProfileId` (`GET /languageprofile` → `[0]
-     .id` if the endpoint exists / returns a non-empty list; omit on 404/empty →
-     v4), `POST /api/v3/series` with `buildSeriesAddPayload(...)`. Return
-     `{ added:true }`.
+  2. Defaults + optional `languageProfileId` (`GET /languageprofile` → `[0].id`
+     if the endpoint exists / returns a non-empty list; omit on 404/empty → v4).
+  3. `POST /api/v3/series` with `buildSeriesAddPayload(...)`. On 2xx →
+     `{added:true}`. On an "already exists" 400 → `{added:false}`. Else throw.
 
 ## Component 3: `/send-to-arr` — ensure then push
 
@@ -174,8 +188,14 @@ episode }` (all the new fields optional). Flow:
      push** (nothing to import into). Surfaced to the row as "Error".
 3. **Push** the release via `release/push` exactly as today (key appended
    server-side; response scrubbed of `apikey=`).
-4. Respond with `{ added: <bool>, ...scrubbedPushBody }` and the push status, so
-   the client can distinguish "added" from "already there".
+4. Respond `{ added: <bool>, push: <scrubbedPushBody> }` with the push's status
+   code. **Nest** the push body under `push` — do NOT spread it. `release/push`
+   can return an **array** of decisions; spreading an array into an object
+   literal yields `{ added, '0': {…} }`, which would break the client's
+   `Array.isArray(data) ? data[0] : data` logic and silently misread every push
+   as "Grabbed". Nesting keeps the push body intact for the unchanged
+   `interpretPush`. (If ensure fails at step 2, the route returns its error
+   status/body and never reaches here.)
 
 ## Component 4: SearchPage — send IDs, richer feedback
 
@@ -183,12 +203,15 @@ episode }` (all the new fields optional). Flow:
 - `grabToArr` includes them: `api.post('/nzbgeek/send-to-arr', { title, nzbUrl:
   r.link, pubDate, target, imdbId: r.imdbId, tvdbId: r.tvdbId, season: r.season,
   episode: r.episode })`.
-- `interpretPush` (or a thin wrapper) also reads the top-level `added` flag: on a
-  grabbed outcome, if `added === true` show **"Added + Grabbed"**, else
-  **"Grabbed"**. Rejected/Error unchanged. (The `added` flag lives alongside the
-  push decision fields; a rejected push with `added:true` still shows "Rejected"
-  — the add happened but the release was declined, which is worth the rejection
-  message.)
+- **Reading the new envelope:** on success (2xx), `res.data` is `{ added, push }`.
+  Pass `res.data.push` (NOT `res.data`) into the **unchanged** `interpretPush`,
+  and read `res.data.added` from the top level. If the outcome is `grabbed` and
+  `added === true` → **"Added + Grabbed"**; grabbed and not added → **"Grabbed"**.
+  Rejected/Error unchanged (a rejected push with `added:true` still shows
+  "Rejected" — the add happened but the release was declined, which is the useful
+  message). On a thrown non-2xx (ensure failed / arr unreachable), the catch
+  passes the error body to `interpretPush` → **"Error"** (the added state is not
+  surfaced in the error case; acceptable).
 
 ## Data Flow
 
@@ -205,17 +228,21 @@ approval the arr grabs via SAB (correct category) → CDH → import → Plex re
 | Movie/series id missing on the result | Skip ensure; push-only (may reject "unknown"). |
 | Lookup returns nothing for the id | `ensure` throws → route 502 → row "Error: not found". |
 | No quality profile / root folder configured | `ensure` throws a clear error → row "Error". |
-| Already in library | `ensure` returns `added:false`; proceed to push. |
-| Add fails ("already exists") | Treated as `added:false`; proceed to push. |
-| Add fails (other) | Route error; row "Error" with the arr's message. |
+| Already in library (add returns "already exists" 400) | `ensure` returns `added:false`; proceed to push → row "Grabbed". |
+| Add fails (other non-2xx) | `ensure` throws → route error; row "Error" with the arr's message. |
+| TV: grabbed season not in lookup `seasons[]` | Fallback: all seasons monitored (so the pushed episode imports). |
 | Push rejected after a successful add | Row "Rejected: <reason>" (add happened; release declined). Rare once monitored. |
 | Sonarr v3 vs v4 `languageProfileId` | Included only when `languageprofile` exists; otherwise omitted. Verified in the live test. |
 
 ## Testing Strategy
 
-- **Parser:** vitest — `formatImdbId` (zero-pad → `tt…`, empty → null), season/
-  episode parsing (`S01`→1, missing→null), and the real fixture (movie items get
-  a `tt…` imdbId; assert shape).
+- **Parser:** vitest — `formatImdbId` (zero-pad → `tt…`, empty/NaN → null),
+  season/episode parsing (`S01`→1, `E00`→0, missing→null), against **both real
+  fixtures**: the movies fixture (`nzbgeek-search.json`; items yield `tt…`
+  imdbId — real values `00133093`→`tt0133093`, `00242653`→`tt0242653`) AND the
+  new **real TV fixture** (`nzbgeek-search-tv.json`; items yield `tvdbId`
+  `361753`, `season` 1, `episode` including a season-pack `0`). Both are captured
+  from the live API with keys redacted.
 - **`arrAdd` pure helpers:** vitest — `buildMovieAddPayload`/
   `buildSeriesAddPayload` produce the enriched objects (correct monitored season,
   addOptions, languageProfileId present/absent), given synthetic lookup objects.
@@ -241,18 +268,30 @@ approval the arr grabs via SAB (correct category) → CDH → import → Plex re
   the intended "it's in my library now" behavior. `searchForMovie:false` /
   `searchForMissingEpisodes:false` prevent an immediate extra search on add.
 - **imdb formatting:** NZBGeek zero-pads; `tt`+`parseInt`.padStart(7) handles 7-
-  and 8-digit ids. If a lookup-by-imdb ever misses, a fallback to
-  `movie/lookup?term=<release title>` is a possible later addition (not now).
-- **"Already present" checks** use `GET /movie?tmdbId=` (Radarr filters) and
-  `GET /series` scan (Sonarr). Fine for a home library; the duplicate-add error
-  path is also handled as `added:false` as a backstop.
+  and 8-digit ids (with a `NaN`→null guard). If a lookup-by-imdb ever misses, a
+  fallback to `movie/lookup?term=<release title>` is a possible later addition.
+- **TV episode monitoring is the #1 live-test check.** We monitor the grabbed
+  season (or all seasons if we can't match it) with `searchForMissingEpisodes:
+  false`. The open question the live test answers: does the pushed episode
+  actually import given that monitoring, or does Sonarr reject it as unmonitored?
+  If rejected, the fix is to also set `addOptions.monitor` or monitor the exact
+  episode post-add — deferred until the live test shows it's needed.
+- **Idempotency via the add-error path**, not a pre-fetch: we attempt the add and
+  treat Radarr's/Sonarr's "already exists" 400 as `added:false`. This avoids
+  relying on `GET /movie?tmdbId=` filtering (unreliable across versions — if the
+  filter were ignored it would return the whole library and nothing would ever be
+  added).
 
 ## Files Touched
 
 **New:**
-- `server/src/services/arrAdd.ts` — imdb formatting, add-payload builders,
-  default pickers, `ensureMovie`/`ensureSeries`.
-- `server/src/services/arrAdd.test.ts` — pure-helper unit tests.
+- `server/src/services/arrAdd.ts` — add-payload builders, default pickers,
+  `ensureMovie`/`ensureSeries`. (`formatImdbId` lives in `newznab.ts`.)
+- `server/src/services/arrAdd.test.ts` — pure-helper unit tests (payload
+  builders, season-monitoring incl. the no-match fallback).
+- `server/src/services/__fixtures__/nzbgeek-search-tv.json` — real captured TV
+  `extended=1` response (keys redacted); **already created and committed by the
+  controller** (contains a live key in the raw capture, so redacted out-of-band).
 - `docs/superpowers/specs/2026-07-02-auto-add-on-grab-design.md` (this file).
 
 **Modified:**
