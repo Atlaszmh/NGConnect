@@ -133,7 +133,11 @@ export function parseNewznabResults(raw: unknown): NzbResult[];
   - `guid`: `asString(item.guid)` → fall back to `link`. Must be a usable string
     (React key + send-to-arr/sab).
   - `title`: `item.title` → `''`.
-  - `link`: `asString(item.link)` → `''`.
+  - `link`: `asString(item.link)` with the **NZBGeek `apikey` stripped**
+    (`stripApiKey`) — NZBGeek embeds `&apikey=<key>` inside each `<link>`, and
+    returning it in `{ results }` would leak the key to the browser. The grab
+    endpoints re-append the key server-side, so stripping is transparent to
+    functionality and satisfies the "keys never reach the browser" requirement.
   - `sizeBytes`: `enclosure["@attributes"].length` → attr `size` → `item.size`,
     parsed int; non-numeric → `0`.
   - `pubDate`: **attr `usenetdate`** → `item.pubDate`; original string, `''` if
@@ -183,7 +187,10 @@ specific `categoryId`; size from attr when no enclosure; malformed input
   response + upstream status so a wrong value surfaces as a visible error rather
   than a silent failure, and the live grab test (Verification) confirms it.
 - Respond with the arr's status code and JSON body (the decision:
-  `approved` / `rejected` / `rejections[]`), so the client can render outcome.
+  `approved` / `rejected` / `rejections[]`), so the client can render outcome —
+  but **scrub `apikey=` from the echoed body first**: `release/push` echoes the
+  pushed release including the keyed `downloadUrl`, which would otherwise
+  round-trip the NZBGeek key back to the browser.
 - Plain `fetch` + `try/catch` + 502 on connection failure, matching the file's
   style. No API keys sent to the browser. (If any wildcard route is added, use
   Express 5 `/*path` form per CLAUDE.md — none is needed here.)
