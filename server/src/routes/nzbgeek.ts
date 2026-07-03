@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { config } from '../config';
+import { parseNewznabResults } from '../services/newznab';
 
 export const nzbgeekRouter = Router();
 
 // Search NZBGeek via Newznab API
 nzbgeekRouter.get('/search', async (req: Request, res: Response) => {
-  const { q, cat, limit = '50' } = req.query;
+  const { q, cat, limit = '100' } = req.query;
 
   if (!q || typeof q !== 'string') {
     res.status(400).json({ error: 'Search query (q) is required' });
@@ -19,6 +20,7 @@ nzbgeekRouter.get('/search', async (req: Request, res: Response) => {
   url.searchParams.set('q', q);
   url.searchParams.set('o', 'json');
   url.searchParams.set('limit', String(limit));
+  url.searchParams.set('extended', '1'); // REQUIRED: grabs/usenetdate are only returned with extended=1
 
   if (cat && typeof cat === 'string') {
     url.searchParams.set('cat', cat);
@@ -27,7 +29,7 @@ nzbgeekRouter.get('/search', async (req: Request, res: Response) => {
   try {
     const response = await fetch(url.toString());
     const data = await response.json();
-    res.json(data);
+    res.json({ results: parseNewznabResults(data) });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('NZBGeek search error:', message);
