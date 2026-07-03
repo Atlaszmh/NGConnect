@@ -5,10 +5,18 @@ export interface ArrBase {
 
 type Dict = Record<string, unknown>;
 
+// Radarr lookups always carry tmdbId; imdbId is not guaranteed. Prefer tmdb.
+export function movieLookupTerm(id: { tmdbId?: number; imdbId?: string }): string {
+  if (typeof id.tmdbId === 'number' && id.tmdbId > 0) return `tmdb:${id.tmdbId}`;
+  if (id.imdbId) return `imdb:${id.imdbId}`;
+  throw new Error('movie id requires tmdbId or imdbId');
+}
+
 export function buildMovieAddPayload(
   lookupMovie: Dict,
   qualityProfileId: number,
-  rootFolderPath: string
+  rootFolderPath: string,
+  search = false
 ): Dict {
   // Spread lookup FIRST, then our enrichment so our values win.
   return {
@@ -17,7 +25,7 @@ export function buildMovieAddPayload(
     rootFolderPath,
     monitored: true,
     minimumAvailability: 'released',
-    addOptions: { searchForMovie: false },
+    addOptions: { searchForMovie: search },
   };
 }
 
@@ -26,7 +34,8 @@ export function buildSeriesAddPayload(
   qualityProfileId: number,
   rootFolderPath: string,
   season: number | null,
-  languageProfileId?: number
+  languageProfileId?: number,
+  search = false
 ): Dict {
   const seasons = Array.isArray(lookupSeries.seasons)
     ? (lookupSeries.seasons as Array<Dict>)
@@ -41,7 +50,7 @@ export function buildSeriesAddPayload(
     qualityProfileId,
     rootFolderPath,
     monitored: true,
-    addOptions: { searchForMissingEpisodes: false },
+    addOptions: { searchForMissingEpisodes: search },
     seasons: mappedSeasons,
   };
   if (languageProfileId !== undefined) payload.languageProfileId = languageProfileId;
@@ -79,15 +88,20 @@ function looksAlreadyAdded(status: number, body: unknown): boolean {
   return text.includes('already') || text.includes('existsvalidator');
 }
 
-export async function ensureMovie(base: ArrBase, imdbId: string): Promise<{ added: boolean }> {
-  const lookup = await arrGet(base, `/movie/lookup?term=imdb:${encodeURIComponent(imdbId)}`);
+export async function ensureMovie(
+  base: ArrBase,
+  id: { tmdbId?: number; imdbId?: string },
+  search = false
+): Promise<{ added: boolean }> {
+  const term = movieLookupTerm(id);
+  const lookup = await arrGet(base, `/movie/lookup?term=${encodeURIComponent(term)}`);
   const movie = Array.isArray(lookup) ? (lookup[0] as Dict | undefined) : undefined;
-  if (!movie) throw new Error(`No movie found for ${imdbId}`);
+  if (!movie) throw new Error(`No movie found for ${term}`);
   const { qualityProfileId, rootFolderPath } = await fetchDefaults(base);
   const res = await fetch(`${base.url}/api/v3/movie`, {
     method: 'POST',
     headers: { 'X-Api-Key': base.apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildMovieAddPayload(movie, qualityProfileId, rootFolderPath)),
+    body: JSON.stringify(buildMovieAddPayload(movie, qualityProfileId, rootFolderPath, search)),
   });
   if (res.ok) return { added: true };
   const body = await res.json().catch(() => null);
@@ -98,7 +112,8 @@ export async function ensureMovie(base: ArrBase, imdbId: string): Promise<{ adde
 export async function ensureSeries(
   base: ArrBase,
   tvdbId: number,
-  season: number | null
+  season: number | null,
+  search = false
 ): Promise<{ added: boolean }> {
   const lookup = await arrGet(base, `/series/lookup?term=tvdb:${tvdbId}`);
   const series = Array.isArray(lookup) ? (lookup[0] as Dict | undefined) : undefined;
@@ -115,7 +130,7 @@ export async function ensureSeries(
   const res = await fetch(`${base.url}/api/v3/series`, {
     method: 'POST',
     headers: { 'X-Api-Key': base.apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildSeriesAddPayload(series, qualityProfileId, rootFolderPath, season, languageProfileId)),
+    body: JSON.stringify(buildSeriesAddPayload(series, qualityProfileId, rootFolderPath, season, languageProfileId, search)),
   });
   if (res.ok) return { added: true };
   const body = await res.json().catch(() => null);

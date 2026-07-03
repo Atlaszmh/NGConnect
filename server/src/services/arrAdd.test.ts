@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMovieAddPayload, buildSeriesAddPayload } from './arrAdd';
+import { buildMovieAddPayload, buildSeriesAddPayload, movieLookupTerm } from './arrAdd';
 
 describe('buildMovieAddPayload', () => {
   it('enriches the lookup object; our fields override', () => {
@@ -44,5 +44,34 @@ describe('buildSeriesAddPayload', () => {
   it('includes languageProfileId only when provided', () => {
     const p = buildSeriesAddPayload(lookup(), 3, '/tv', 1, 2) as Record<string, unknown>;
     expect(p.languageProfileId).toBe(2);
+  });
+});
+
+describe('search flag', () => {
+  it('buildMovieAddPayload sets searchForMovie from the flag', () => {
+    const off = buildMovieAddPayload({ tmdbId: 1 }, 3, '/movies') as Record<string, unknown>;
+    expect(off.addOptions).toEqual({ searchForMovie: false }); // default unchanged
+    const on = buildMovieAddPayload({ tmdbId: 1 }, 3, '/movies', true) as Record<string, unknown>;
+    expect(on.addOptions).toEqual({ searchForMovie: true });
+  });
+
+  it('buildSeriesAddPayload sets searchForMissingEpisodes from the flag', () => {
+    const lookup = { tvdbId: 1, seasons: [{ seasonNumber: 1, monitored: true }] };
+    const off = buildSeriesAddPayload(lookup, 3, '/tv', null) as Record<string, unknown>;
+    expect(off.addOptions).toEqual({ searchForMissingEpisodes: false }); // default unchanged
+    const on = buildSeriesAddPayload(lookup, 3, '/tv', null, undefined, true) as Record<string, unknown>;
+    expect(on.addOptions).toEqual({ searchForMissingEpisodes: true });
+  });
+});
+
+describe('movieLookupTerm', () => {
+  it('prefers tmdb when both ids are present', () => {
+    expect(movieLookupTerm({ tmdbId: 27205, imdbId: 'tt1375666' })).toBe('tmdb:27205');
+  });
+  it('falls back to imdb when no tmdbId', () => {
+    expect(movieLookupTerm({ imdbId: 'tt1375666' })).toBe('imdb:tt1375666');
+  });
+  it('throws when neither id is present', () => {
+    expect(() => movieLookupTerm({})).toThrow();
   });
 });
