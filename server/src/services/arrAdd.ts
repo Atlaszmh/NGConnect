@@ -65,7 +65,7 @@ async function fetchDefaults(base: ArrBase): Promise<{ qualityProfileId: number;
   ]);
   const qualityProfileId = Array.isArray(profiles) ? profiles[0]?.id : undefined;
   const rootFolderPath = Array.isArray(folders) ? folders[0]?.path : undefined;
-  if (!qualityProfileId) throw new Error('No quality profile configured in the app');
+  if (qualityProfileId == null) throw new Error('No quality profile configured in the app');
   if (!rootFolderPath) throw new Error('No root folder configured in the app');
   return { qualityProfileId, rootFolderPath };
 }
@@ -73,7 +73,10 @@ async function fetchDefaults(base: ArrBase): Promise<{ qualityProfileId: number;
 function looksAlreadyAdded(status: number, body: unknown): boolean {
   if (status !== 400 && status !== 409) return false;
   const text = JSON.stringify(body ?? '').toLowerCase();
-  return text.includes('already') || text.includes('exist');
+  // Radarr/Sonarr duplicate-add signatures: "...already been added" +
+  // errorCode "MovieExistsValidator"/"SeriesExistsValidator". Do NOT match a
+  // bare "exist" — that would swallow real errors like "Root folder does not exist".
+  return text.includes('already') || text.includes('existsvalidator');
 }
 
 export async function ensureMovie(base: ArrBase, imdbId: string): Promise<{ added: boolean }> {
