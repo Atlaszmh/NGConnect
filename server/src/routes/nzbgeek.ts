@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { config } from '../config';
 import { parseNewznabResults } from '../services/newznab';
+import { ensureMovie, ensureSeries } from '../services/arrAdd';
 
 export const nzbgeekRouter = Router();
 
@@ -98,7 +99,7 @@ nzbgeekRouter.post('/send-to-sab', async (req: Request, res: Response) => {
 // Hand a release to Sonarr/Radarr via release/push so their Completed Download
 // Handling imports it (and Plex refreshes). Keeps all API keys server-side.
 nzbgeekRouter.post('/send-to-arr', async (req: Request, res: Response) => {
-  const { title, nzbUrl, pubDate, target } = req.body ?? {};
+  const { title, nzbUrl, pubDate, target, imdbId, tvdbId, season } = req.body ?? {};
 
   // Guard for STRINGS (not just truthy): downloadUrl is built outside the
   // try/catch below, so a non-string nzbUrl would throw an unhandled 500 on
@@ -113,6 +114,21 @@ nzbgeekRouter.post('/send-to-arr', async (req: Request, res: Response) => {
   }
 
   const base = target === 'sonarr' ? config.sonarr : config.radarr;
+
+  // Ensure the movie/show is in the library (idempotent) so release/push can match it.
+  let added = false;
+  try {
+    if (target === 'radarr' && typeof imdbId === 'string' && imdbId) {
+      added = (await ensureMovie(config.radarr, imdbId)).added;
+    } else if (target === 'sonarr' && typeof tvdbId === 'number' && tvdbId > 0) {
+      added = (await ensureSeries(config.sonarr, tvdbId, typeof season === 'number' ? season : null)).added;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Auto-add failed';
+    console.error(`send-to-arr ensure [${target}] error:`, message);
+    res.status(502).json({ error: message });
+    return;
+  }
 
   // Append the NZBGeek API key server-side (same rule as send-to-sab).
   const downloadUrl = nzbUrl.includes('apikey')
@@ -141,10 +157,10 @@ nzbgeekRouter.post('/send-to-arr', async (req: Request, res: Response) => {
       const scrubbed = JSON.parse(
         JSON.stringify(body).replace(/apikey=[^&"\\]+/gi, 'apikey=REDACTED')
       );
-      res.json(scrubbed);
+      res.json({ added, push: scrubbed });
     } else {
       const text = await response.text();
-      res.send(text.replace(/apikey=[^&"\\]+/gi, 'apikey=REDACTED'));
+      res.json({ added, push: text.replace(/apikey=[^&"\\]+/gi, 'apikey=REDACTED') });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
