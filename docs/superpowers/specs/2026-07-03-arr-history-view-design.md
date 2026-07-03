@@ -1,7 +1,7 @@
 # Arr History View — Design Spec
 
 **Date:** 2026-07-03
-**Status:** Approved (pending spec review)
+**Status:** Approved
 **Author:** Zach + Claude
 
 ## Problem
@@ -142,8 +142,10 @@ Add to `system.ts` (authed, like its siblings):
 - Fetch both arrs' recent history in parallel, each best-effort:
   - `GET ${config.radarr.url}/api/v3/history?page=1&pageSize=50&sortKey=date&sortDirection=descending&includeMovie=true` with `X-Api-Key`.
   - `GET ${config.sonarr.url}/api/v3/history?page=1&pageSize=50&sortKey=date&sortDirection=descending&includeSeries=true&includeEpisode=true`.
-  - Wrap each fetch so a failure/timeout yields `null` (don't fail the whole
-    request if one arr is down).
+  - Wrap each fetch in `try/catch` returning `null` on any error, and impose a
+    timeout with **`AbortSignal.timeout(10000)`** (the pattern already used for
+    arr calls in `healthMonitor.ts`) so a hung/slow arr yields `null` rather than
+    stalling the whole request. `Promise.all` the two.
 - `const items = normalizeArrHistory(radarrRaw, sonarrRaw).slice(0, 50);`
 - Respond `res.json({ items })`. If BOTH fetches failed, still return
   `{ items: [] }` (200) — an empty history is not a 500. (Optionally include a
@@ -155,15 +157,22 @@ Add to `system.ts` (authed, like its siblings):
 
 - Add a `HistoryItem` interface (mirror the server) and `history` state typed to
   it; drop the SAB `HistorySlot` type and the `mode=history` fetch.
+- **Split the two data sources into separate fetch functions + separate state
+  and try/catch**, so a history error can never null the queue (today they share
+  one `Promise.all`, which couples their failure). `fetchQueue()` sets `queue`;
+  `fetchHistory()` sets `history`.
 - **Queue tab unchanged.** Keep the 5s poll for the **queue only**
-  (`/sabnzbd/api?mode=queue`).
-- **History:** fetch `/system/history` on mount, on switching to the History tab,
-  and on manual Refresh (not every 5s). Store `items`.
+  (`fetchQueue` → `/sabnzbd/api?mode=queue`).
+- **History:** `fetchHistory()` reads `/system/history` **on mount** (so the tab
+  badge count isn't stale), on switching to the History tab, and on manual
+  Refresh — NOT on the 5s poll. Store `items`.
 - Render the History table: **Title · Type · Event · Quality · Size · Age**.
   - Type: a badge "Movie"/"TV" from `kind`.
   - Event: `badge-success` "Imported" / `badge-danger` "Failed".
-  - Size: `formatSize(sizeBytes)` (reuse/port the byte formatter; `null`/0 → `--`).
-  - Age: relative from `date` (reuse a `formatAge`-style helper; invalid → `--`).
+  - Size: a local `formatSize(bytes: number | null)` — **port**, don't literally
+    reuse SearchPage's (it returns `'?'`); `null`/0 → `--`, else GB/MB.
+  - Age: a local `formatAge(date: string)` — relative ("2 days", "3 mths");
+    empty/invalid → `--` (again distinct from SearchPage's `'?'`).
   - `key={item.id}`.
 - Remove the SAB-history Retry button and the `retryItem` handler (dead once the
   source changes; the arrs manage their own failures).
@@ -199,6 +208,12 @@ Queue tab → `/sabnzbd/api?mode=queue` (unchanged, 5s poll).
   known recent import (e.g. the earlier test grab) appears, and that the Queue
   tab still works. If a title/size looks wrong, report a sample record and we
   adjust the normalizer.
+- **Recommended follow-up (retires the size-field risk):** during that check,
+  capture one real Sonarr and one real Radarr `/history` JSON response (nothing
+  secret in them — no key scrubbing needed), commit them under
+  `server/src/services/__fixtures__/`, and add a fixture-backed regression test
+  (as `newznab.test.ts` does). This pins the real `data.size` location. Not a v1
+  blocker; do it once we have a real sample.
 
 ## Risks / Open Questions
 
