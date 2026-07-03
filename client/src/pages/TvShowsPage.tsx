@@ -9,6 +9,7 @@ interface Series {
   year: number;
   seasonCount: number;
   tvdbId?: number;
+  seasons?: { seasonNumber: number; monitored?: boolean }[];
   episodeCount: number;
   episodeFileCount: number;
   status: string;
@@ -49,6 +50,7 @@ export default function TvShowsPage() {
   const [searchResults, setSearchResults] = useState<Series[]>([]);
   const [addSearching, setAddSearching] = useState(false);
   const [addState, setAddState] = useState<Record<number, AddState>>({});
+  const [checkedSeasons, setCheckedSeasons] = useState<Record<number, number[]>>({});
 
   useEffect(() => {
     fetchSeries();
@@ -98,22 +100,40 @@ export default function TvShowsPage() {
     if (!addQuery.trim()) return;
     setAddState({});
     setSearchResults([]);
+    setCheckedSeasons({});
     setAddSearching(true);
     try {
       const res = await api.get('/sonarr/series/lookup', {
         params: { term: addQuery },
       });
-      setSearchResults(Array.isArray(res.data) ? res.data : []);
+      const results: Series[] = Array.isArray(res.data) ? res.data : [];
+      setSearchResults(results);
+      const cs: Record<number, number[]> = {};
+      results.forEach((r, i) => {
+        cs[i] = (r.seasons ?? []).filter((s) => s.seasonNumber >= 1).map((s) => s.seasonNumber);
+      });
+      setCheckedSeasons(cs);
     } catch {
       setSearchResults([]);
     }
     setAddSearching(false);
   };
 
+  const toggleSeason = (i: number, seasonNumber: number) => {
+    setCheckedSeasons((p) => {
+      const cur = p[i] ?? [];
+      const next = cur.includes(seasonNumber)
+        ? cur.filter((n) => n !== seasonNumber)
+        : [...cur, seasonNumber];
+      return { ...p, [i]: next };
+    });
+  };
+
   const addSeries = async (r: Series, i: number) => {
     setAddState((p) => ({ ...p, [i]: 'adding' }));
     try {
-      const res = await api.post('/sonarr/add-series', { tvdbId: r.tvdbId });
+      const body = r.seasons ? { tvdbId: r.tvdbId, seasons: checkedSeasons[i] ?? [] } : { tvdbId: r.tvdbId };
+      const res = await api.post('/sonarr/add-series', body);
       const added = res.data?.added === true;
       setAddState((p) => ({ ...p, [i]: added ? 'added' : 'already' }));
       if (added) fetchSeries();
@@ -136,7 +156,7 @@ export default function TvShowsPage() {
       <div className="page-header">
         <h2>TV Shows</h2>
         <div className="header-actions">
-          <button onClick={() => { setShowAddModal(true); setAddState({}); setSearchResults([]); setAddQuery(''); }} className="btn-primary">
+          <button onClick={() => { setShowAddModal(true); setAddState({}); setSearchResults([]); setAddQuery(''); setCheckedSeasons({}); }} className="btn-primary">
             <Plus size={16} /> Add Show
           </button>
           <button className="btn-icon" onClick={fetchSeries} title="Refresh">
@@ -311,14 +331,37 @@ export default function TvShowsPage() {
                 return (
                   <div key={i} className="search-result-item">
                     <span>{r.title} ({r.year})</span>
-                    <div className="grab-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      <span className="placeholder">{r.seasonCount} seasons</span>
+                    <div className="grab-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      {r.seasons && r.seasons.some((s) => s.seasonNumber >= 1) ? (
+                        <span style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {r.seasons
+                            .filter((s) => s.seasonNumber >= 1)
+                            .map((s) => (
+                              <label key={s.seasonNumber} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '0.85em' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={(checkedSeasons[i] ?? []).includes(s.seasonNumber)}
+                                  onChange={() => toggleSeason(i, s.seasonNumber)}
+                                />
+                                S{s.seasonNumber}
+                              </label>
+                            ))}
+                        </span>
+                      ) : (
+                        <span className="placeholder">{r.seasonCount} seasons</span>
+                      )}
                       {st === 'adding' && <span className="placeholder">Adding…</span>}
                       {st === 'added' && <span className="badge badge-success">Added — searching</span>}
                       {st === 'already' && <span className="badge badge-warning">Already in library</span>}
                       {st === 'error' && <span className="badge badge-danger">Error</span>}
                       {(st === 'idle' || st === 'error') && (
-                        <button className="btn-sm btn-primary" onClick={() => addSeries(r, i)}>Add</button>
+                        <button
+                          className="btn-sm btn-primary"
+                          disabled={!!(r.seasons && r.seasons.some((s) => s.seasonNumber >= 1) && !(checkedSeasons[i]?.length))}
+                          onClick={() => addSeries(r, i)}
+                        >
+                          Add
+                        </button>
                       )}
                     </div>
                   </div>
