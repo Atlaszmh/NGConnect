@@ -1,8 +1,27 @@
 import { Router } from 'express';
+import type { Request, Response } from 'express';
 import { config } from '../config';
 import { proxyRequest } from '../services/proxy';
+import { ensureSeries } from '../services/arrAdd';
 
 export const sonarrRouter = Router();
+
+// Add a series (whole show monitored) AND search all missing episodes immediately.
+sonarrRouter.post('/add-series', async (req: Request, res: Response) => {
+  const { tvdbId } = req.body ?? {};
+  if (typeof tvdbId !== 'number' || tvdbId <= 0) {
+    res.status(400).json({ error: 'tvdbId (positive number) is required' });
+    return;
+  }
+  try {
+    const { added } = await ensureSeries(config.sonarr, tvdbId, null, true);
+    res.json({ added });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Add series failed';
+    console.error('sonarr add-series error:', message);
+    res.status(502).json({ error: message });
+  }
+});
 
 sonarrRouter.all('/*path', (req, res) => {
   proxyRequest(req, res, {

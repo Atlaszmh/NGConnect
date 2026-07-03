@@ -119,7 +119,7 @@ nzbgeekRouter.post('/send-to-arr', async (req: Request, res: Response) => {
   let added = false;
   try {
     if (target === 'radarr' && typeof imdbId === 'string' && imdbId) {
-      added = (await ensureMovie(config.radarr, imdbId)).added;
+      added = (await ensureMovie(config.radarr, { imdbId })).added;
     } else if (target === 'sonarr' && typeof tvdbId === 'number' && tvdbId > 0) {
       added = (await ensureSeries(config.sonarr, tvdbId, typeof season === 'number' ? season : null)).added;
     }
