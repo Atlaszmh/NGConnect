@@ -1,7 +1,7 @@
 # Auto-Add on Grab — Design Spec
 
 **Date:** 2026-07-02
-**Status:** Approved (pending spec review)
+**Status:** Approved
 **Author:** Zach + Claude
 
 ## Problem
