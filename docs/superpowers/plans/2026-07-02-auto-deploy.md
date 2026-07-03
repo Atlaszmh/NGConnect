@@ -24,6 +24,7 @@
 - `deploy/install-updater.ps1` — one-time admin setup on the server PC.
 
 **Modified files:**
+- `server/tsconfig.json` — exclude `**/*.test.ts` from the build (see Task 5b).
 - `server/src/index.ts` — mount `healthRouter` before auth and the `NODE_ENV` static block.
 - `server/src/routes/system.ts` — add `GET /update/status` and `POST /update/check`.
 - `client/src/pages/SettingsPage.tsx` — add the "Updates" card; show the real running commit.
@@ -479,6 +480,35 @@ Expected: `build ok`.
 ```bash
 git add server/src/routes/system.ts
 git commit -m "feat(server): add /api/system/update status and check routes"
+```
+
+---
+
+### Task 5b: Exclude test files from the tsc build (pipeline-critical)
+
+Discovered during Chunk 1 verification: `server/tsconfig.json` has `include: ["src/**/*"]`, so `tsc` compiles `*.test.ts` into `dist/services/*.test.js`. vitest then picks up those compiled CommonJS copies and fails them ("Vitest cannot be imported in a CommonJS module using require()"). This is order-dependent — clean only when `dist/` has no compiled tests. **This breaks the deploy pipeline:** `update.ps1` runs `npm test` (step 6) with the *previous* deploy's `dist/` still present, so every deploy after the first would falsely abort at the test gate.
+
+**Files:**
+- Modify: `server/tsconfig.json`
+
+- [ ] **Step 1: Exclude test files from the build**
+
+Change the `exclude` array in `server/tsconfig.json` from `["node_modules", "dist"]` to:
+
+```json
+"exclude": ["node_modules", "dist", "**/*.test.ts"]
+```
+
+- [ ] **Step 2: Verify build-then-test is now clean**
+
+Run: `cd server && rm -rf dist && npm run build && (ls dist/services/*.test.js 2>/dev/null && echo "BAD: test files in dist" || echo "good: no test files in dist"); npm test`
+Expected: "good: no test files in dist", then `Test Files 2 passed (2)` / `Tests 20 passed (20)` — clean even though a build preceded the test run.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add server/tsconfig.json
+git commit -m "fix(server): exclude test files from tsc build"
 ```
 
 ---

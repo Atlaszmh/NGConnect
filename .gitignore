@@ -9,3 +9,8 @@ server/src/daemon/ngconnect.xml
 .claude/
 .DS_Store
 Thumbs.db
+
+# Auto-deploy updater runtime state
+deploy/.deploy-status.json
+deploy/.last-deployed
+deploy/.update.lock

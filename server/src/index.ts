@@ -10,6 +10,7 @@ import { radarrRouter } from './routes/radarr';
 import { sabnzbdRouter } from './routes/sabnzbd';
 import { systemRouter } from './routes/system';
 import { nzbgeekRouter } from './routes/nzbgeek';
+import { healthRouter } from './routes/health';
 import { startVpnMonitor, onVpnEvent } from './services/vpnMonitor';
 import { startHealthMonitor } from './services/healthMonitor';
 import { addNotification } from './services/notifications';
@@ -25,6 +26,9 @@ app.use(helmet({
 app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json());
 app.use(requestLogger);
+
+// Liveness probe for the auto-deploy updater (public, always mounted)
+app.use(healthRouter);
 
 // Auth routes (public)
 app.use('/api/auth', authRouter);

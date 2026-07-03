@@ -7,6 +7,16 @@ interface ServiceTest {
   message?: string;
 }
 
+interface DeployStatus {
+  sha: string | null;
+  subject: string | null;
+  lastCheck: string | null;
+  result: 'up-to-date' | 'updated' | 'failed' | 'unknown';
+  error: string | null;
+}
+
+type CheckState = 'idle' | 'checking' | 'triggered' | 'not-installed' | 'error';
+
 export default function SettingsPage() {
   const [tests, setTests] = useState<Record<string, ServiceTest>>({
     sonarr: { status: 'idle' },
@@ -47,8 +57,43 @@ export default function SettingsPage() {
     testService('sabnzbd');
   };
 
+  const [deploy, setDeploy] = useState<DeployStatus | null>(null);
+  const [checkState, setCheckState] = useState<CheckState>('idle');
+
+  const loadDeployStatus = async () => {
+    try {
+      const res = await api.get('/system/update/status');
+      setDeploy(res.data);
+    } catch {
+      setDeploy(null);
+    }
+  };
+
+  const checkForUpdates = async () => {
+    setCheckState('checking');
+    try {
+      const res = await api.post('/system/update/check');
+      if (res.data?.triggered) {
+        setCheckState('triggered');
+        // The updater may restart the server; re-poll status after a delay.
+        setTimeout(loadDeployStatus, 8000);
+      } else if (res.data?.reason === 'updater-not-installed') {
+        // Defensive: the server returns 409 for this case (handled in catch),
+        // so this branch only fires if it ever returns not-installed with a 2xx.
+        setCheckState('not-installed');
+      } else {
+        setCheckState('error');
+      }
+    } catch (err: unknown) {
+      // 409 => updater not installed; anything else => generic error
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      setCheckState(status === 409 ? 'not-installed' : 'error');
+    }
+  };
+
   useEffect(() => {
     testAll();
+    loadDeployStatus();
   }, []);
 
   const statusIcon = (test: ServiceTest) => {
@@ -124,11 +169,58 @@ NZBGEEK_API_KEY=your_key_here`}
         </div>
 
         <div className="card">
+          <h3>Updates</h3>
+          <div className="detail-list">
+            <div className="detail-row">
+              <span className="detail-label">Running</span>
+              <span className="detail-value">
+                {deploy?.sha
+                  ? `${deploy.sha}${deploy.subject ? ` — ${deploy.subject}` : ''}`
+                  : 'Unknown'}
+              </span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Last checked</span>
+              <span className="detail-value">
+                {deploy?.lastCheck
+                  ? `${new Date(deploy.lastCheck).toLocaleString()} (${deploy.result})`
+                  : 'Never'}
+              </span>
+            </div>
+          </div>
+
+          <button
+            style={{ marginTop: '16px' }}
+            onClick={checkForUpdates}
+            disabled={checkState === 'checking'}
+          >
+            {checkState === 'checking' ? 'Checking…' : 'Check for Updates Now'}
+          </button>
+
+          {checkState === 'triggered' && (
+            <p className="placeholder" style={{ marginTop: '12px' }}>
+              Update check started — the dashboard may briefly disconnect if an update
+              is applied.
+            </p>
+          )}
+          {checkState === 'not-installed' && (
+            <p className="placeholder" style={{ marginTop: '12px' }}>
+              The auto-updater isn't installed on this machine.
+            </p>
+          )}
+          {checkState === 'error' && (
+            <p className="placeholder" style={{ marginTop: '12px' }}>
+              Couldn't start an update check. See the server log for details.
+            </p>
+          )}
+        </div>
+
+        <div className="card">
           <h3>About</h3>
           <div className="detail-list">
             <div className="detail-row">
               <span className="detail-label">NGConnect</span>
-              <span className="detail-value">v1.0.0</span>
+              <span className="detail-value">{deploy?.sha ? deploy.sha : 'v1.0.0'}</span>
             </div>
             <div className="detail-row">
               <span className="detail-label">Frontend</span>
