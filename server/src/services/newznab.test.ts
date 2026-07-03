@@ -57,6 +57,16 @@ describe('parseNewznabResults — core shape', () => {
     expect(r[0].sizeBytes).toBe(1500000000);
   });
 
+  it('strips the NZBGeek apikey from link (no key leaked to the browser)', () => {
+    const r = parseNewznabResults({
+      channel: {
+        item: [item({ link: 'https://api.nzbgeek.info/api?t=get&id=abc123&apikey=REDACTED' })],
+      },
+    });
+    expect(r[0].link).not.toContain('apikey');
+    expect(r[0].link).toContain('id=abc123');
+  });
+
   it('skips items with neither guid nor link', () => {
     const r = parseNewznabResults({ channel: { item: [item({ guid: '', link: '' })] } });
     expect(r).toHaveLength(0);

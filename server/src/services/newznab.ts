@@ -9,6 +9,17 @@ export interface NzbResult {
   grabs: number | null;    // null if absent
 }
 
+function stripApiKey(u: string): string {
+  if (!u) return u;
+  try {
+    const url = new URL(u);
+    url.searchParams.delete('apikey');
+    return url.toString();
+  } catch {
+    return u.replace(/([?&])apikey=[^&]*/gi, (_, sep) => (sep === '?' ? '?' : '')).replace(/[?&]$/, '');
+  }
+}
+
 function asString(x: unknown): string {
   if (typeof x === 'string') return x;
   if (x && typeof x === 'object') {
@@ -83,7 +94,7 @@ export function parseNewznabResults(raw: unknown): NzbResult[] {
     const item = entry as Record<string, unknown>;
     const attrs = readAttrs(item);
 
-    const link = asString(item.link);
+    const link = stripApiKey(asString(item.link));
     const guid = asString(item.guid) || link;
     if (!guid && !link) continue;
 
@@ -92,7 +103,9 @@ export function parseNewznabResults(raw: unknown): NzbResult[] {
       title: asString(item.title),
       link,
       category: asString(item.category),
-      categoryId: attrs.categories.length ? Math.max(...attrs.categories) : null,
+      categoryId: attrs.categories.length
+        ? attrs.categories.reduce((m, n) => (n > m ? n : m), -Infinity)
+        : null,
       sizeBytes: sizeOf(item, attrs),
       pubDate: attrs.first.get('usenetdate') ?? asString(item.pubDate),
       grabs: toInt(attrs.first.get('grabs')),

@@ -136,9 +136,15 @@ nzbgeekRouter.post('/send-to-arr', async (req: Request, res: Response) => {
     const contentType = response.headers.get('content-type') || '';
     res.status(response.status);
     if (contentType.includes('application/json')) {
-      res.json(await response.json());
+      const body = await response.json();
+      // The arr echoes the pushed release incl. the keyed downloadUrl; scrub keys before returning.
+      const scrubbed = JSON.parse(
+        JSON.stringify(body).replace(/apikey=[^&"\\]+/gi, 'apikey=REDACTED')
+      );
+      res.json(scrubbed);
     } else {
-      res.send(await response.text());
+      const text = await response.text();
+      res.send(text.replace(/apikey=[^&"\\]+/gi, 'apikey=REDACTED'));
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
