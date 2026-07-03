@@ -516,6 +516,13 @@ Find the grabbed badge in the Action cell and make it render the stored message:
 if (g === 'grabbed') return <span className="badge badge-success" title={grab[r.rowId]?.msg}>{grab[r.rowId]?.msg || 'Grabbed'}</span>;
 ```
 
+**Side effect to handle:** the SAB path (`grabToSab`) also reaches the `'grabbed'`
+state and currently sets `msg: 'Sent to SAB (no auto-import)'` — which is too long
+for a badge. Shorten it in `grabToSab` to `msg: 'Sent to SAB'` (the "won't
+auto-import" wording already lives in the `→ SAB` button's `title` tooltip). Now
+the badge reads: "Added + Grabbed" (auto-added via arr), "Grabbed" (was already
+in the arr library), or "Sent to SAB" (escape hatch).
+
 - [ ] **Step 4: Build the client**
 
 Run: `cd client && npm run build`
