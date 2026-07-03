@@ -94,3 +94,55 @@ nzbgeekRouter.post('/send-to-sab', async (req: Request, res: Response) => {
     res.status(502).json({ error: 'Failed to send to SABnzbd' });
   }
 });
+
+// Hand a release to Sonarr/Radarr via release/push so their Completed Download
+// Handling imports it (and Plex refreshes). Keeps all API keys server-side.
+nzbgeekRouter.post('/send-to-arr', async (req: Request, res: Response) => {
+  const { title, nzbUrl, pubDate, target } = req.body ?? {};
+
+  // Guard for STRINGS (not just truthy): downloadUrl is built outside the
+  // try/catch below, so a non-string nzbUrl would throw an unhandled 500 on
+  // `.includes`. Mirrors /search's `typeof q !== 'string'` check.
+  if (typeof nzbUrl !== 'string' || !nzbUrl || typeof title !== 'string' || !title) {
+    res.status(400).json({ error: 'title and nzbUrl (strings) are required' });
+    return;
+  }
+  if (target !== 'sonarr' && target !== 'radarr') {
+    res.status(400).json({ error: "target must be 'sonarr' or 'radarr'" });
+    return;
+  }
+
+  const base = target === 'sonarr' ? config.sonarr : config.radarr;
+
+  // Append the NZBGeek API key server-side (same rule as send-to-sab).
+  const downloadUrl = nzbUrl.includes('apikey')
+    ? nzbUrl
+    : `${nzbUrl}&apikey=${config.nzbgeek.apiKey}`;
+
+  const payload = {
+    title,
+    downloadUrl,
+    protocol: 'usenet', // current Sonarr/Radarr v3 value; verified only via the live grab test
+    publishDate: pubDate || new Date().toISOString(),
+  };
+
+  try {
+    const response = await fetch(`${base.url}/api/v3/release/push`, {
+      method: 'POST',
+      headers: { 'X-Api-Key': base.apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    // Pass the arr's status + body straight through so the UI can read the decision.
+    const contentType = response.headers.get('content-type') || '';
+    res.status(response.status);
+    if (contentType.includes('application/json')) {
+      res.json(await response.json());
+    } else {
+      res.send(await response.text());
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`send-to-arr [${target}] error:`, message);
+    res.status(502).json({ error: `Could not connect to ${target}` });
+  }
+});
