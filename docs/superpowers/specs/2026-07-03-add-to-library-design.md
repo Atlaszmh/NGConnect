@@ -66,10 +66,17 @@ to `false` so the existing `send-to-arr` caller is byte-for-byte unchanged:
 
 **Movie identity:** Radarr lookups reliably carry `tmdbId`, not always `imdbId`.
 Generalize the internal movie lookup to accept a term of either `tmdb:<id>` or
-`imdb:<id>`, preferring tmdb. `ensureMovie` accepts an id descriptor
-`{ tmdbId?, imdbId? }` (or two optional params) and builds the term, erroring if
-neither is present. The existing `send-to-arr` caller (which passes `imdbId`)
-continues to work via the imdb branch.
+`imdb:<id>`, **preferring tmdb**. Change `ensureMovie`'s signature to an id
+descriptor: `ensureMovie(base, id: { tmdbId?: number; imdbId?: string }, search = false)`.
+It builds `tmdb:<tmdbId>` if `tmdbId` is present, else `imdb:<imdbId>`, and
+throws if neither is present.
+
+**Required caller edit:** the existing `send-to-arr` call at `nzbgeek.ts:122` is
+currently `ensureMovie(config.radarr, imdbId)` (bare string). It **must** be
+reshaped to `ensureMovie(config.radarr, { imdbId })` (search omitted → defaults
+to `false`). Without this edit the build breaks. `ensureSeries` keeps its
+positional signature, gaining only the trailing `search = false` param, so its
+`send-to-arr` caller at `nzbgeek.ts:124` needs no change.
 
 ### Server — new routes (matched before the catch-all proxy)
 
@@ -88,7 +95,12 @@ surface arr/network failures as `502` with a short message. `added: false` (the
 
 ### Client
 
-- **`TvShowsPage`**: add `tvdbId: number` to the lookup result type. Give each
+Note: both modals reuse the page's *library* `Series` / `Movie` interfaces for
+`searchResults` — there is no separate lookup type. So "add the id to the lookup
+result type" means adding **optional** fields (`tvdbId?`, `tmdbId?`, `imdbId?`)
+to those shared interfaces.
+
+- **`TvShowsPage`**: add `tvdbId?: number` to the `Series` interface. Give each
   `search-result-item` an **Add** button (or make the row clickable) with per-row
   state keyed by result index: `idle → adding → added / already / error`. On
   click → `POST /sonarr/add-series` with `{ tvdbId }`. On `added: true` show
@@ -115,6 +127,10 @@ keyed by row, badge classes `badge-success` / `badge-warning` / `badge-danger`).
   and `search: false` — assert the correct `addOptions` key/value and that other
   fields (monitored, quality profile, root folder, season monitoring) are
   unchanged. Pure functions, no network.
+- **Unit:** the movie lookup-term builder prefers `tmdb:<id>` when both ids are
+  present and falls back to `imdb:<id>` — this identity generalization is the
+  most error-prone new logic. (Factor the term-building into a small pure helper
+  so it can be asserted without hitting the network.)
 - **Live (server PC only):** the arrs are localhost-only, so a real add + grab
   must be run on the server PC. Verify: add a movie and a show, confirm each
   appears monitored in Radarr/Sonarr, a search fires, SAB receives the download,
