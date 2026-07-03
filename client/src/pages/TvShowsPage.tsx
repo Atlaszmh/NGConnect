@@ -8,6 +8,7 @@ interface Series {
   sortTitle: string;
   year: number;
   seasonCount: number;
+  tvdbId?: number;
   episodeCount: number;
   episodeFileCount: number;
   status: string;
@@ -32,6 +33,8 @@ interface Episode {
   airDateUtc?: string;
 }
 
+type AddState = 'idle' | 'adding' | 'added' | 'already' | 'error';
+
 export default function TvShowsPage() {
   const [series, setSeries] = useState<Series[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +48,7 @@ export default function TvShowsPage() {
   const [addQuery, setAddQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Series[]>([]);
   const [addSearching, setAddSearching] = useState(false);
+  const [addState, setAddState] = useState<Record<number, AddState>>({});
 
   useEffect(() => {
     fetchSeries();
@@ -102,6 +106,18 @@ export default function TvShowsPage() {
       setSearchResults([]);
     }
     setAddSearching(false);
+  };
+
+  const addSeries = async (r: Series, i: number) => {
+    setAddState((p) => ({ ...p, [i]: 'adding' }));
+    try {
+      const res = await api.post('/sonarr/add-series', { tvdbId: r.tvdbId });
+      const added = res.data?.added === true;
+      setAddState((p) => ({ ...p, [i]: added ? 'added' : 'already' }));
+      if (added) fetchSeries();
+    } catch {
+      setAddState((p) => ({ ...p, [i]: 'error' }));
+    }
   };
 
   const getPoster = (s: Series) => {
@@ -288,14 +304,24 @@ export default function TvShowsPage() {
               </button>
             </div>
             <div className="search-results">
-              {searchResults.map((r, i) => (
-                <div key={i} className="search-result-item">
-                  <span>
-                    {r.title} ({r.year})
-                  </span>
-                  <span className="placeholder">{r.seasonCount} seasons</span>
-                </div>
-              ))}
+              {searchResults.map((r, i) => {
+                const st = addState[i] ?? 'idle';
+                return (
+                  <div key={i} className="search-result-item">
+                    <span>{r.title} ({r.year})</span>
+                    <div className="grab-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <span className="placeholder">{r.seasonCount} seasons</span>
+                      {st === 'adding' && <span className="placeholder">Adding…</span>}
+                      {st === 'added' && <span className="badge badge-success">Added — searching</span>}
+                      {st === 'already' && <span className="badge badge-warning">Already in library</span>}
+                      {st === 'error' && <span className="badge badge-danger">Error</span>}
+                      {(st === 'idle' || st === 'error') && (
+                        <button className="btn-sm btn-primary" onClick={() => addSeries(r, i)}>Add</button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <button
               className="btn-close"
