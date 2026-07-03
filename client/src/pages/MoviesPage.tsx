@@ -13,6 +13,8 @@ interface Movie {
   images: { coverType: string; remoteUrl?: string; url?: string }[];
   sizeOnDisk?: number;
   movieFile?: { quality?: { quality?: { name: string } }; size: number };
+  tmdbId?: number;
+  imdbId?: string;
 }
 
 export default function MoviesPage() {
@@ -27,6 +29,8 @@ export default function MoviesPage() {
   const [addQuery, setAddQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Movie[]>([]);
   const [addSearching, setAddSearching] = useState(false);
+  type AddState = 'idle' | 'adding' | 'added' | 'already' | 'error';
+  const [addState, setAddState] = useState<Record<number, AddState>>({});
 
   useEffect(() => {
     fetchMovies();
@@ -68,6 +72,18 @@ export default function MoviesPage() {
       setSearchResults([]);
     }
     setAddSearching(false);
+  };
+
+  const addMovie = async (r: Movie, i: number) => {
+    setAddState((p) => ({ ...p, [i]: 'adding' }));
+    try {
+      const res = await api.post('/radarr/add-movie', { tmdbId: r.tmdbId, imdbId: r.imdbId });
+      const added = res.data?.added === true;
+      setAddState((p) => ({ ...p, [i]: added ? 'added' : 'already' }));
+      if (added) fetchMovies();
+    } catch {
+      setAddState((p) => ({ ...p, [i]: 'error' }));
+    }
   };
 
   const getPoster = (m: Movie) => {
@@ -203,16 +219,23 @@ export default function MoviesPage() {
               </button>
             </div>
             <div className="search-results">
-              {searchResults.map((r, i) => (
-                <div key={i} className="search-result-item">
-                  <span>
-                    {r.title} ({r.year})
-                  </span>
-                  <span className="placeholder">
-                    {r.overview?.slice(0, 100)}...
-                  </span>
-                </div>
-              ))}
+              {searchResults.map((r, i) => {
+                const st = addState[i] ?? 'idle';
+                return (
+                  <div key={i} className="search-result-item">
+                    <span>{r.title} ({r.year})</span>
+                    <div className="grab-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      {st === 'adding' && <span className="placeholder">Adding…</span>}
+                      {st === 'added' && <span className="badge badge-success">Added — searching</span>}
+                      {st === 'already' && <span className="badge badge-warning">Already in library</span>}
+                      {st === 'error' && <span className="badge badge-danger">Error</span>}
+                      {(st === 'idle' || st === 'error') && (
+                        <button className="btn-sm btn-primary" onClick={() => addMovie(r, i)}>Add</button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <button className="btn-close" onClick={() => setShowAddModal(false)}>
               Close
