@@ -121,7 +121,7 @@ nzbgeekRouter.post('/send-to-arr', async (req: Request, res: Response) => {
     if (target === 'radarr' && typeof imdbId === 'string' && imdbId) {
       added = (await ensureMovie(config.radarr, { imdbId })).added;
     } else if (target === 'sonarr' && typeof tvdbId === 'number' && tvdbId > 0) {
-      added = (await ensureSeries(config.sonarr, tvdbId, typeof season === 'number' ? season : null)).added;
+      added = (await ensureSeries(config.sonarr, tvdbId, typeof season === 'number' ? [season] : null)).added;
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Auto-add failed';

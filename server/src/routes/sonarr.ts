@@ -8,13 +8,17 @@ export const sonarrRouter = Router();
 
 // Add a series (whole show monitored) AND search all missing episodes immediately.
 sonarrRouter.post('/add-series', async (req: Request, res: Response) => {
-  const { tvdbId } = req.body ?? {};
+  const { tvdbId, seasons } = req.body ?? {};
   if (typeof tvdbId !== 'number' || tvdbId <= 0) {
     res.status(400).json({ error: 'tvdbId (positive number) is required' });
     return;
   }
+  if (seasons !== undefined && (!Array.isArray(seasons) || !seasons.every((n) => typeof n === 'number'))) {
+    res.status(400).json({ error: 'seasons must be an array of numbers' });
+    return;
+  }
   try {
-    const { added } = await ensureSeries(config.sonarr, tvdbId, null, true);
+    const { added } = await ensureSeries(config.sonarr, tvdbId, Array.isArray(seasons) ? seasons : null, true);
     res.json({ added });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Add series failed';

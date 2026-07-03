@@ -33,17 +33,21 @@ export function buildSeriesAddPayload(
   lookupSeries: Dict,
   qualityProfileId: number,
   rootFolderPath: string,
-  season: number | null,
+  seasons: number[] | null,   // null/empty → monitor ALL; else monitor exactly these
   languageProfileId?: number,
   search = false
 ): Dict {
-  const seasons = Array.isArray(lookupSeries.seasons)
+  const lookupSeasons = Array.isArray(lookupSeries.seasons)
     ? (lookupSeries.seasons as Array<Dict>)
     : [];
-  const hasMatch = season !== null && seasons.some((s) => s.seasonNumber === season);
-  const mappedSeasons = seasons.map((s) => ({
+  const wantAll = !seasons || seasons.length === 0;
+  const selected = new Set(seasons ?? []);
+  // Safety: if a non-empty selection matches none of the lookup seasons,
+  // fall back to all-monitored — never add a fully-unmonitored show.
+  const anyMatch = !wantAll && lookupSeasons.some((s) => selected.has(s.seasonNumber as number));
+  const mappedSeasons = lookupSeasons.map((s) => ({
     ...s,
-    monitored: hasMatch ? s.seasonNumber === season : true, // no match/null -> all monitored
+    monitored: wantAll || !anyMatch ? true : selected.has(s.seasonNumber as number),
   }));
   const payload: Dict = {
     ...lookupSeries,
@@ -112,7 +116,7 @@ export async function ensureMovie(
 export async function ensureSeries(
   base: ArrBase,
   tvdbId: number,
-  season: number | null,
+  seasons: number[] | null,
   search = false
 ): Promise<{ added: boolean }> {
   const lookup = await arrGet(base, `/series/lookup?term=tvdb:${tvdbId}`);
@@ -130,7 +134,7 @@ export async function ensureSeries(
   const res = await fetch(`${base.url}/api/v3/series`, {
     method: 'POST',
     headers: { 'X-Api-Key': base.apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildSeriesAddPayload(series, qualityProfileId, rootFolderPath, season, languageProfileId, search)),
+    body: JSON.stringify(buildSeriesAddPayload(series, qualityProfileId, rootFolderPath, seasons, languageProfileId, search)),
   });
   if (res.ok) return { added: true };
   const body = await res.json().catch(() => null);
