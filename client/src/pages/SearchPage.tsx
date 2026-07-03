@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import api from '../services/api';
 
 interface NzbResult {
   guid: string;
+  rowId: string;
   title: string;
   link: string;
   category: string;
@@ -87,7 +88,7 @@ function filterTarget(filterCat: string): ArrTarget | 'sab' | null {
   return bandTarget(filterCat ? parseInt(filterCat, 10) : null);
 }
 // Interpret a release/push response into a row outcome. Safe defaults:
-// non-2xx -> error; any rejections/temporarilyRejected -> rejected; else grabbed.
+// non-2xx -> error; approved===false / rejections / temporarilyRejected -> rejected; else grabbed.
 function interpretPush(status: number, data: unknown): { state: GrabState; msg?: string } {
   if (status < 200 || status >= 300) {
     const m = (data as { error?: string; message?: string })?.error
@@ -95,14 +96,15 @@ function interpretPush(status: number, data: unknown): { state: GrabState; msg?:
     return { state: 'error', msg: String(m) };
   }
   const d = (Array.isArray(data) ? data[0] : data) as {
-    approved?: boolean; rejected?: boolean; temporarilyRejected?: boolean;
+    approved?: boolean; temporarilyRejected?: boolean;
     rejections?: ({ reason?: string } | string)[];
   } | undefined;
   const rejections = d?.rejections;
-  if ((Array.isArray(rejections) && rejections.length > 0) || d?.rejected || d?.temporarilyRejected) {
+  const hasRejections = Array.isArray(rejections) && rejections.length > 0;
+  if (d?.approved === false || hasRejections || d?.temporarilyRejected) {
     const first = rejections?.[0];
     const reason = typeof first === 'string' ? first : first?.reason;
-    return { state: 'rejected', msg: reason || 'Rejected by ' + (d?.rejected ? 'indexer' : 'the app') };
+    return { state: 'rejected', msg: reason || 'Not accepted (already in library, unmonitored, or not an upgrade)' };
   }
   return { state: 'grabbed' };
 }
@@ -117,8 +119,8 @@ export default function SearchPage() {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [grab, setGrab] = useState<Record<string, { state: GrabState; msg?: string }>>({});
-  const setRow = (guid: string, v: { state: GrabState; msg?: string }) =>
-    setGrab((p) => ({ ...p, [guid]: v }));
+  const setRow = (rowId: string, v: { state: GrabState; msg?: string }) =>
+    setGrab((p) => ({ ...p, [rowId]: v }));
 
   const clickSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -138,7 +140,11 @@ export default function SearchPage() {
       const res = await api.get('/nzbgeek/search', {
         params: { q: query, cat: category || undefined },
       });
-      setResults(Array.isArray(res.data?.results) ? res.data.results : []);
+      setResults(
+        (Array.isArray(res.data?.results) ? res.data.results : []).map(
+          (r: NzbResult, i: number) => ({ ...r, rowId: `${r.guid}#${i}` })
+        )
+      );
     } catch {
       setResults([]);
     }
@@ -146,31 +152,30 @@ export default function SearchPage() {
   };
 
   const grabToArr = async (r: NzbResult, target: ArrTarget) => {
-    setRow(r.guid, { state: 'sending' });
+    setRow(r.rowId, { state: 'sending' });
     try {
       const res = await api.post('/nzbgeek/send-to-arr', {
         title: r.title, nzbUrl: r.link, pubDate: r.pubDate, target,
       });
-      setRow(r.guid, interpretPush(res.status, res.data));
+      setRow(r.rowId, interpretPush(res.status, res.data));
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number; data?: unknown } })?.response?.status;
       const data = (err as { response?: { data?: unknown } })?.response?.data;
-      setRow(r.guid, interpretPush(status ?? 0, data));
+      setRow(r.rowId, interpretPush(status ?? 0, data));
     }
   };
 
   const grabToSab = async (r: NzbResult) => {
-    setRow(r.guid, { state: 'sending' });
+    setRow(r.rowId, { state: 'sending' });
     try {
       await api.post('/nzbgeek/send-to-sab', { title: r.title, nzbUrl: r.link });
-      setRow(r.guid, { state: 'grabbed', msg: 'Sent to SAB (no auto-import)' });
+      setRow(r.rowId, { state: 'grabbed', msg: 'Sent to SAB (no auto-import)' });
     } catch {
-      setRow(r.guid, { state: 'error', msg: 'SAB error' });
+      setRow(r.rowId, { state: 'error', msg: 'SAB error' });
     }
   };
 
-  const formatSize = (sizeStr?: string) => {
-    const bytes = parseInt(sizeStr || '0');
+  const formatSize = (bytes: number) => {
     if (!bytes) return '?';
     const gb = bytes / (1024 * 1024 * 1024);
     return gb >= 1
@@ -190,7 +195,7 @@ export default function SearchPage() {
     return months < 24 ? `${months} mths` : `${Math.floor(days / 365)} yrs`;
   };
 
-  const sorted = sortResults(results, sortKey, sortDir);
+  const sorted = useMemo(() => sortResults(results, sortKey, sortDir), [results, sortKey, sortDir]);
 
   return (
     <div className="page">
@@ -237,19 +242,16 @@ export default function SearchPage() {
             </thead>
             <tbody>
               {sorted.map((r) => (
-                <tr key={r.guid}>
+                <tr key={r.rowId}>
                   <td className="name-cell">{r.title}</td>
                   <td>{categoryLabel(r)}</td>
                   <td>{formatAge(r.pubDate)}</td>
-                  <td>{formatSize(String(r.sizeBytes))}</td>
+                  <td>{formatSize(r.sizeBytes)}</td>
                   <td>{r.grabs != null ? r.grabs : '--'}</td>
                   <td>
                     {(() => {
-                      const g = grab[r.guid]?.state ?? 'idle';
-                      if (g === 'grabbed') return <span className="badge badge-success" title={grab[r.guid]?.msg}>Grabbed</span>;
-                      // rejected uses badge-warning (amber) to read as "heads up, add it to the library",
-                      // distinct from error's badge-danger (red). Both classes exist in index.css.
-                      if (g === 'rejected') return <span className="badge badge-warning" title={grab[r.guid]?.msg}>Rejected: {grab[r.guid]?.msg}</span>;
+                      const g = grab[r.rowId]?.state ?? 'idle';
+                      if (g === 'grabbed') return <span className="badge badge-success" title={grab[r.rowId]?.msg}>Grabbed</span>;
                       if (g === 'sending') return <span className="placeholder">Sending…</span>;
 
                       // Resolve target: filter first, then result category band.
@@ -260,19 +262,26 @@ export default function SearchPage() {
                       const rt = bandTarget(r.categoryId);
                       const resolved = ft ?? rt;
 
+                      // On rejected/error keep the SAB escape hatch (force it to SAB) beside
+                      // the badge, but drop the Sonarr/Radarr buttons — the arr already declined.
+                      const declined = g === 'rejected' || g === 'error';
+
                       return (
                         <div className="grab-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          {resolved === 'sonarr' && <button className="btn-sm btn-primary" onClick={() => grabToArr(r, 'sonarr')}>Sonarr</button>}
-                          {resolved === 'radarr' && <button className="btn-sm btn-primary" onClick={() => grabToArr(r, 'radarr')}>Radarr</button>}
-                          {resolved == null && (
+                          {!declined && resolved === 'sonarr' && <button className="btn-sm btn-primary" onClick={() => grabToArr(r, 'sonarr')}>Sonarr</button>}
+                          {!declined && resolved === 'radarr' && <button className="btn-sm btn-primary" onClick={() => grabToArr(r, 'radarr')}>Radarr</button>}
+                          {!declined && resolved == null && (
                             <>
                               <button className="btn-sm btn-primary" onClick={() => grabToArr(r, 'sonarr')}>Sonarr</button>
                               <button className="btn-sm btn-primary" onClick={() => grabToArr(r, 'radarr')}>Radarr</button>
                             </>
                           )}
+                          {/* rejected uses badge-warning (amber) to read as "heads up, add it to the library",
+                              distinct from error's badge-danger (red). Both classes exist in index.css. */}
+                          {g === 'rejected' && <span className="badge badge-warning" title={grab[r.rowId]?.msg}>Rejected: {grab[r.rowId]?.msg}</span>}
                           {/* SAB escape hatch — always available; won't auto-import */}
                           <button className="btn-sm" title="Send straight to SABnzbd (won't auto-import into Plex)" onClick={() => grabToSab(r)}>→ SAB</button>
-                          {g === 'error' && <span className="badge badge-danger" title={grab[r.guid]?.msg}>Error</span>}
+                          {g === 'error' && <span className="badge badge-danger" title={grab[r.rowId]?.msg}>Error</span>}
                         </div>
                       );
                     })()}
