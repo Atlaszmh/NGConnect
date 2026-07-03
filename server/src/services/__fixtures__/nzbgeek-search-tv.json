@@ -1,0 +1,549 @@
+{
+  "@attributes": {
+    "version": "1.0"
+  },
+  "channel": {
+    "title": "api.nzbgeek.info",
+    "description": "NZBgeek API",
+    "link": "http://api.nzbgeek.info/",
+    "language": "en-gb",
+    "webMaster": "info@nzbgeek.info (NZBgeek)",
+    "category": {},
+    "image": {
+      "url": "https://api.nzbgeek.info/covers/nzbgeek.png",
+      "title": "api.nzbgeek.info",
+      "link": "http://api.nzbgeek.info/",
+      "description": "NZBgeek"
+    },
+    "response": {
+      "@attributes": {
+        "offset": "0",
+        "total": "2538"
+      }
+    },
+    "item": [
+      {
+        "title": "The.Mandalorian.S01.2160p.UHD.BDRip.HEVC.10bit.HDR.TrueHD.7.1.Atmos-MUSHR00M",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=3bdd9ac8ac6955184ec77f4576d76f06",
+        "link": "https://api.nzbgeek.info/api?t=get&id=3bdd9ac8ac6955184ec77f4576d76f06&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=3bdd9ac8ac6955184ec77f4576d76f06",
+        "pubDate": "Mon, 08 Jun 2026 01:55:52 +0000",
+        "category": "TV > UHD",
+        "description": "The.Mandalorian.S01.2160p.UHD.BDRip.HEVC.10bit.HDR.TrueHD.7.1.Atmos-MUSHR00M",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=3bdd9ac8ac6955184ec77f4576d76f06&apikey=REDACTED",
+            "length": "69259048000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "5000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "5045"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "69259048000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "3bdd9ac8ac6955184ec77f4576d76f06"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "tvdbid",
+              "value": "361753"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "season",
+              "value": "S01"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "episode",
+              "value": "E00"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/tv/361753.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "language",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "subs",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "61"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "1"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Mon, 08 Jun 2026 00:42:32 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Mandalorian.S01E01.Chapter.1.The.Mandalorian.2160p.UHD.BDRip.HEVC.10bit.HDR.TrueHD.7.1.Atmos-MUSHR00M",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=eff50d67cc79bcc8f4fd95078164fb2c",
+        "link": "https://api.nzbgeek.info/api?t=get&id=eff50d67cc79bcc8f4fd95078164fb2c&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=eff50d67cc79bcc8f4fd95078164fb2c",
+        "pubDate": "Mon, 08 Jun 2026 01:55:52 +0000",
+        "category": "TV > UHD",
+        "description": "The.Mandalorian.S01E01.Chapter.1.The.Mandalorian.2160p.UHD.BDRip.HEVC.10bit.HDR.TrueHD.7.1.Atmos-MUSHR00M",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=eff50d67cc79bcc8f4fd95078164fb2c&apikey=REDACTED",
+            "length": "6949309000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "5000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "5045"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "6949309000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "eff50d67cc79bcc8f4fd95078164fb2c"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "tvdbid",
+              "value": "361753"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "season",
+              "value": "S01"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "episode",
+              "value": "E01"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/tv/361753.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "24"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "1"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Sun, 07 Jun 2026 23:56:57 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Mandalorian.S01E07.Chapter.7.The.Reckoning.2160p.UHD.BDRip.HEVC.10bit.HDR.TrueHD.7.1.Atmos-MUSHR00M",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=1a09bbe58248e20d85e9e8351fe39542",
+        "link": "https://api.nzbgeek.info/api?t=get&id=1a09bbe58248e20d85e9e8351fe39542&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=1a09bbe58248e20d85e9e8351fe39542",
+        "pubDate": "Mon, 08 Jun 2026 01:58:51 +0000",
+        "category": "TV > UHD",
+        "description": "The.Mandalorian.S01E07.Chapter.7.The.Reckoning.2160p.UHD.BDRip.HEVC.10bit.HDR.TrueHD.7.1.Atmos-MUSHR00M",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=1a09bbe58248e20d85e9e8351fe39542&apikey=REDACTED",
+            "length": "9463108000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "5000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "5045"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "9463108000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "1a09bbe58248e20d85e9e8351fe39542"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "tvdbid",
+              "value": "361753"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "season",
+              "value": "S01"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "episode",
+              "value": "E07"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/tv/361753.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "743"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Sun, 07 Jun 2026 23:52:03 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Mandalorian.S01E08.Chapter.8.Redemption.2160p.UHD.BDRip.HEVC.10bit.HDR.TrueHD.7.1.Atmos-MUSHR00M",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=c4f15cb6c7e1e286a3bf76cbfbe5a888",
+        "link": "https://api.nzbgeek.info/api?t=get&id=c4f15cb6c7e1e286a3bf76cbfbe5a888&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=c4f15cb6c7e1e286a3bf76cbfbe5a888",
+        "pubDate": "Mon, 08 Jun 2026 01:58:51 +0000",
+        "category": "TV > UHD",
+        "description": "The.Mandalorian.S01E08.Chapter.8.Redemption.2160p.UHD.BDRip.HEVC.10bit.HDR.TrueHD.7.1.Atmos-MUSHR00M",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=c4f15cb6c7e1e286a3bf76cbfbe5a888&apikey=REDACTED",
+            "length": "9726406000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "5000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "5045"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "9726406000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "c4f15cb6c7e1e286a3bf76cbfbe5a888"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "tvdbid",
+              "value": "361753"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "season",
+              "value": "S01"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "episode",
+              "value": "E08"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/tv/361753.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "21"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "1"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Sun, 07 Jun 2026 23:46:25 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Mandalorian.S01E06.Chapter.6.The.Prisoner.2160p.UHD.BDRip.HEVC.10bit.HDR.TrueHD.7.1.Atmos-MUSHR00M",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=ffe04fdeefde6075cfba30733eac887d",
+        "link": "https://api.nzbgeek.info/api?t=get&id=ffe04fdeefde6075cfba30733eac887d&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=ffe04fdeefde6075cfba30733eac887d",
+        "pubDate": "Mon, 08 Jun 2026 01:59:02 +0000",
+        "category": "TV > UHD",
+        "description": "The.Mandalorian.S01E06.Chapter.6.The.Prisoner.2160p.UHD.BDRip.HEVC.10bit.HDR.TrueHD.7.1.Atmos-MUSHR00M",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=ffe04fdeefde6075cfba30733eac887d&apikey=REDACTED",
+            "length": "11130535000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "5000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "5045"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "11130535000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "ffe04fdeefde6075cfba30733eac887d"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "tvdbid",
+              "value": "361753"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "season",
+              "value": "S01"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "episode",
+              "value": "E06"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/tv/361753.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "759"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Sun, 07 Jun 2026 23:40:41 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

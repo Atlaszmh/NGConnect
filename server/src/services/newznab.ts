@@ -7,6 +7,10 @@ export interface NzbResult {
   sizeBytes: number;       // 0 if unknown
   pubDate: string;         // original date string; '' if unknown
   grabs: number | null;    // null if absent
+  imdbId: string | null;   // 'tt#######' (movies), else null
+  tvdbId: number | null;   // TV series id, else null
+  season: number | null;   // grabbed season number (from 'S01'), else null
+  episode: number | null;  // grabbed episode number (from 'E00'), else null (0 for season packs)
 }
 
 function stripApiKey(u: string): string {
@@ -37,6 +41,22 @@ function toInt(v: unknown): number | null {
     return Number.isNaN(n) ? null : n;
   }
   return null;
+}
+
+export function formatImdbId(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const n = parseInt(raw, 10);
+  if (Number.isNaN(n)) return null;
+  return 'tt' + String(n).padStart(7, '0');
+}
+
+// Parse 'S01' / 'E00' / '1' -> the integer (0 is valid, e.g. E00 season pack).
+function parseSxxExx(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const m = raw.match(/\d+/);
+  if (!m) return null;
+  const n = parseInt(m[0], 10);
+  return Number.isNaN(n) ? null : n;
 }
 
 interface Attrs {
@@ -109,6 +129,10 @@ export function parseNewznabResults(raw: unknown): NzbResult[] {
       sizeBytes: sizeOf(item, attrs),
       pubDate: attrs.first.get('usenetdate') ?? asString(item.pubDate),
       grabs: toInt(attrs.first.get('grabs')),
+      imdbId: formatImdbId(attrs.first.get('imdb')),
+      tvdbId: toInt(attrs.first.get('tvdbid')),
+      season: parseSxxExx(attrs.first.get('season')),
+      episode: parseSxxExx(attrs.first.get('episode')),
     });
   }
   return results;
