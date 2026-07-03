@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { parseNewznabResults } from './newznab';
+import { parseNewznabResults, formatImdbId } from './newznab';
 
 // Minimal Newznab item in the REAL shape: attrs nested under @attributes.
 function item(overrides: Record<string, unknown> = {}) {
@@ -106,5 +106,47 @@ describe('parseNewznabResults — against the REAL captured fixture', () => {
     // proving we read attr[i]["@attributes"], not a flat attr[i].name.
     expect(results.some((r) => typeof r.grabs === 'number' && r.grabs >= 0)).toBe(true);
     expect(results.every((r) => r.sizeBytes > 0)).toBe(true);
+  });
+});
+
+describe('formatImdbId', () => {
+  it('zero-pads NZBGeek imdb to tt#######', () => {
+    expect(formatImdbId('01375666')).toBe('tt1375666');
+    expect(formatImdbId('00133093')).toBe('tt0133093');
+  });
+  it('handles 8-digit ids', () => {
+    expect(formatImdbId('10872600')).toBe('tt10872600');
+  });
+  it('returns null for empty/garbage', () => {
+    expect(formatImdbId('')).toBeNull();
+    expect(formatImdbId(undefined)).toBeNull();
+    expect(formatImdbId('tt123')).toBeNull(); // non-numeric -> null, not ttNaN
+  });
+});
+
+describe('parseNewznabResults — IDs', () => {
+  it('extracts imdbId from the real movies fixture', () => {
+    const raw = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '__fixtures__/nzbgeek-search.json'), 'utf-8')
+    );
+    const results = parseNewznabResults(raw);
+    expect(results.every((r) => r.imdbId === null || /^tt\d{7,}$/.test(r.imdbId))).toBe(true);
+    expect(results.some((r) => r.imdbId !== null)).toBe(true);
+  });
+  it('extracts tvdbId/season/episode from the real TV fixture', () => {
+    const raw = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '__fixtures__/nzbgeek-search-tv.json'), 'utf-8')
+    );
+    const results = parseNewznabResults(raw);
+    expect(results.some((r) => r.tvdbId === 361753)).toBe(true);
+    expect(results.some((r) => r.season === 1)).toBe(true);
+    // a season pack has episode 0 (E00), which must parse to 0, not null
+    expect(results.some((r) => r.episode === 0)).toBe(true);
+  });
+  it('leaves TV ids null on a movie item and vice versa', () => {
+    const movies = parseNewznabResults(
+      JSON.parse(fs.readFileSync(path.join(__dirname, '__fixtures__/nzbgeek-search.json'), 'utf-8'))
+    );
+    expect(movies.every((r) => r.tvdbId === null)).toBe(true);
   });
 });
