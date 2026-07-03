@@ -7,6 +7,7 @@ export interface HistoryItem {
   quality: string | null;
   sizeBytes: number | null;
   date: string;               // ISO; '' if absent
+  reason: string | null;      // failure reason (data.message) for failed events; null otherwise
 }
 
 type Dict = Record<string, unknown>;
@@ -43,6 +44,10 @@ function normalizeRecord(rec: Dict, source: 'radarr' | 'sonarr'): HistoryItem | 
   const quality = typeof qualityName === 'string' ? qualityName : null;
   const data = rec.data && typeof rec.data === 'object' ? (rec.data as Dict) : {};
   const sizeBytes = toInt(data.size);
+  const reason =
+    event === 'failed' && typeof data.message === 'string' && data.message
+      ? data.message
+      : null;
   const date = typeof rec.date === 'string' ? rec.date : '';
   const id = `${source}-${rec.id ?? ''}`;
 
@@ -73,7 +78,7 @@ function normalizeRecord(rec: Dict, source: 'radarr' | 'sonarr'): HistoryItem | 
     }
   }
 
-  return { id, source, kind, title, event, quality, sizeBytes, date };
+  return { id, source, kind, title, event, quality, sizeBytes, date, reason };
 }
 
 export function normalizeArrHistory(radarrRaw: unknown, sonarrRaw: unknown): HistoryItem[] {

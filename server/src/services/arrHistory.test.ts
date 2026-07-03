@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 import { normalizeArrHistory } from './arrHistory';
 
 // Minimal records in the documented Radarr/Sonarr /history shape.
@@ -73,5 +75,42 @@ describe('normalizeArrHistory', () => {
     expect(normalizeArrHistory(null, null)).toEqual([]);
     expect(normalizeArrHistory({}, 'nope')).toEqual([]);
     expect(normalizeArrHistory({ records: 'x' }, undefined)).toEqual([]);
+  });
+});
+
+describe('normalizeArrHistory — failure reason', () => {
+  it('extracts reason + size from the REAL captured Sonarr failed record', () => {
+    const raw = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '__fixtures__/sonarr-history-failed.json'), 'utf-8')
+    );
+    const [item] = normalizeArrHistory(null, raw); // the record is a Sonarr record
+    expect(item).toMatchObject({
+      source: 'sonarr',
+      kind: 'tv',
+      event: 'failed',
+      reason: 'Aborted, cannot be completed - https://sabnzbd.org/not-complete',
+      sizeBytes: 0, // data.size "0"
+      // raw capture has no series/episode include object → title falls back to sourceTitle
+      title: 'Widows.Bay.S01.1080p.WEBRip.10bit.DDP5.1.x265-NeoNoir',
+    });
+  });
+
+  it('reason is null for imported rows', () => {
+    // radarrImported() / sonarrImported() are the existing helpers in this file
+    const items = normalizeArrHistory(wrap([radarrImported()]), wrap([sonarrImported()]));
+    expect(items.every((i) => i.reason === null)).toBe(true);
+  });
+
+  it('reason is null for a failed record with no data.message', () => {
+    const rec = { id: 3, eventType: 'downloadFailed', sourceTitle: 'X-GRP', date: '2026-07-01T00:00:00Z', data: { size: '123' } };
+    const [item] = normalizeArrHistory(wrap([rec]), null);
+    expect(item.event).toBe('failed');
+    expect(item.reason).toBeNull();
+  });
+
+  it('extracts reason from a synthetic failed record with data.message', () => {
+    const rec = { id: 4, eventType: 'downloadFailed', sourceTitle: 'Y-GRP', date: '2026-07-01T00:00:00Z', data: { message: 'boom', size: '9' } };
+    const [item] = normalizeArrHistory(wrap([rec]), null);
+    expect(item.reason).toBe('boom');
   });
 });

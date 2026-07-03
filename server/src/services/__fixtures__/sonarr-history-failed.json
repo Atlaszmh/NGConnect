@@ -1,0 +1,20 @@
+{
+  "records": [
+    {
+      "episodeId": 1246,
+      "seriesId": 17,
+      "sourceTitle": "Widows.Bay.S01.1080p.WEBRip.10bit.DDP5.1.x265-NeoNoir",
+      "quality": { "quality": { "id": 15, "name": "WEBRip-1080p" } },
+      "date": "2026-07-03T18:53:25Z",
+      "downloadId": "SABnzbd_nzo_w9qb43ys",
+      "eventType": "downloadFailed",
+      "data": {
+        "downloadClient": "SABnzbd",
+        "message": "Aborted, cannot be completed - https://sabnzbd.org/not-complete",
+        "releaseGroup": "NeoNoir",
+        "size": "0"
+      },
+      "id": 223
+    }
+  ]
+}
