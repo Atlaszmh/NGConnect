@@ -36,25 +36,20 @@
 **Files:**
 - Create: `server/src/services/__fixtures__/nzbgeek-search.json`
 
-The fixture is a real NZBGeek `t=search&extended=1&o=json` response captured during design, with **every `apikey` value redacted** — the key appears in the request context AND inside each item's `link` and `enclosure["@attributes"].url` (Newznab embeds `&apikey=`). The controller creates this file from the captured response (`scratchpad/nzbgeek-extended-raw.json`) by replacing every `apikey=<value>` with `apikey=REDACTED`, since the raw capture contains the live key and must not be handled by a subagent.
+The fixture is a real NZBGeek `t=search&extended=1&o=json` response captured during design, with **every `apikey` value redacted** — the key appears inside each item's `link` and `enclosure["@attributes"].url` (Newznab embeds `&apikey=`). **This file is already created and committed by the controller** (commit `ff0bcca`) from the captured response, replacing every `apikey=<value>` with `apikey=REDACTED`, since the raw capture contains the live key and must not be handled by a subagent. This task is therefore verification-only.
 
-- [ ] **Step 1: Verify the fixture exists and is key-free**
+- [ ] **Step 1: Verify the fixture exists, is valid JSON, and is key-free**
 
 Run:
 ```bash
 cd /c/Projects/NGConnect
 test -f server/src/services/__fixtures__/nzbgeek-search.json && echo "fixture present" || echo "MISSING"
-grep -c "apikey=REDACTED" server/src/services/__fixtures__/nzbgeek-search.json
-grep -iE "apikey=[a-z0-9]{8,}" server/src/services/__fixtures__/nzbgeek-search.json && echo "LEAK: real key present" || echo "no real key - good"
+node -e "JSON.parse(require('fs').readFileSync('server/src/services/__fixtures__/nzbgeek-search.json','utf-8')); console.log('valid JSON')"
+# Leak check: find any apikey= value that is NOT the REDACTED placeholder.
+# (Do NOT use `grep -i ... [a-z0-9]{8,}` — case-insensitive matches the word REDACTED and false-positives.)
+grep -oE "apikey=[^&\"]+" server/src/services/__fixtures__/nzbgeek-search.json | grep -v "apikey=REDACTED" && echo "LEAK: real key present" || echo "no real key - good"
 ```
-Expected: "fixture present", a non-zero redaction count, and "no real key - good".
-
-- [ ] **Step 2: Commit** (if not already committed by the controller)
-
-```bash
-git add server/src/services/__fixtures__/nzbgeek-search.json
-git commit -m "test(server): add redacted NZBGeek extended search fixture"
-```
+Expected: "fixture present", "valid JSON", and "no real key - good" (the leak grep prints nothing and the `||` branch fires).
 
 ---
 
@@ -323,7 +318,8 @@ Change the default limit and add `extended`, then normalize the response. In the
   url.searchParams.set('extended', '1'); // REQUIRED: grabs/usenetdate are only returned with extended=1
 ```
 
-Replace the success line `res.json(data);` with:
+In the **`/search` handler only** (the `res.json(data);` on ~line 30 — NOT the
+identical line in `/send-to-sab` at ~line 88), replace the success line with:
 
 ```ts
     res.json({ results: parseNewznabResults(data) });
@@ -362,8 +358,11 @@ In `server/src/routes/nzbgeek.ts`, add after the existing `send-to-sab` route:
 nzbgeekRouter.post('/send-to-arr', async (req: Request, res: Response) => {
   const { title, nzbUrl, pubDate, target } = req.body ?? {};
 
-  if (!nzbUrl || !title) {
-    res.status(400).json({ error: 'title and nzbUrl are required' });
+  // Guard for STRINGS (not just truthy): downloadUrl is built outside the
+  // try/catch below, so a non-string nzbUrl would throw an unhandled 500 on
+  // `.includes`. Mirrors /search's `typeof q !== 'string'` check.
+  if (typeof nzbUrl !== 'string' || !nzbUrl || typeof title !== 'string' || !title) {
+    res.status(400).json({ error: 'title and nzbUrl (strings) are required' });
     return;
   }
   if (target !== 'sonarr' && target !== 'radarr') {
@@ -412,15 +411,13 @@ nzbgeekRouter.post('/send-to-arr', async (req: Request, res: Response) => {
 Run: `cd server && npm run build`
 Expected: `tsc` exits 0.
 
-- [ ] **Step 3: Sanity-check input validation without a live arr**
+- [ ] **Step 3: Confirm the route registers (no separate runtime check here)**
 
-Run this (uses the built server; expects 400s, which need no arr connectivity):
-```bash
-cd server && node -e "
-const app = require('./dist/index.js');
-" 2>/dev/null; echo "(compile-only; live behavior is covered by the user-run grab test in Task 8)"
-```
-Expected: no crash. (Full request testing needs auth + a running server; the meaningful validation branches — missing fields, bad target — are simple guards verified by reading, and the live path is exercised in Task 8.)
+The input-validation branches (missing `title`/`nzbUrl`, bad `target`) are simple
+guards verified by reading the code; the arr-connected path can only be exercised
+on the server PC (Task 8), since the arrs are `localhost`-only. So there is no
+meaningful local runtime test for this route beyond the successful build in
+Step 2 — do not add a fake "no crash" check that would falsely imply verification.
 
 - [ ] **Step 4: Commit**
 
@@ -440,9 +437,20 @@ git commit -m "feat(server): add /nzbgeek/send-to-arr (release/push to Sonarr/Ra
 
 No client test framework exists; verification is `npm run build` (typecheck) + the manual/live check in Task 8.
 
-- [ ] **Step 1: Replace the result type and search parsing**
+> **IMPORTANT — build/commit only once, after Task 6.** Task 5 and Task 6 both
+> rewrite the SAME file (`SearchPage.tsx`) and only compile together (Task 5
+> removes cells/state that Task 6's code replaces). Do **not** run `npm run
+> build` or commit at the end of Task 5. The single build gate and single commit
+> are Task 6 Steps 4–5.
 
-At the top of `SearchPage.tsx`, replace the `NzbResult` interface with the new shape and a sort type:
+- [ ] **Step 1: Update imports, result type, and search parsing**
+
+At the top of `SearchPage.tsx`, first **remove the now-unused `Send` icon** from
+the lucide import (it was only used by the old SABnzbd button; `noUnusedLocals`
+will fail the build otherwise). Change `import { Search, Send } from 'lucide-react';`
+to `import { Search } from 'lucide-react';`.
+
+Then replace the `NzbResult` interface with the new shape and a sort type:
 
 ```tsx
 interface NzbResult {
@@ -541,7 +549,13 @@ function sortResults(rows: NzbResult[], key: SortKey | null, dir: SortDir): NzbR
 
 Then derive the rendered rows: `const sorted = sortResults(results, sortKey, sortDir);` and map over `sorted` instead of `results` in the table body.
 
-- [ ] **Step 3: Make the headers clickable + add Grabs, drop Files**
+- [ ] **Step 3: Rewrite the results table (headers + entire row body)**
+
+**Replace the whole `<table className="data-table">…</table>`**, including deleting
+the old `const size = r.enclosure?.['@attributes']?.length || r.size || '0';`
+line and the entire old `results.map(...)` body — those reference old fields
+(`r.size`, `r.enclosure`) that no longer exist on the new `NzbResult` and would
+be type errors. Map over `sorted` (from Step 2), not `results`.
 
 Replace the `<thead>` with sortable headers (a small arrow shows the active column/dir). Columns: Name, Category, Age, Size, Grabs, Action:
 
@@ -591,28 +605,22 @@ Replace `formatAge` with:
   };
 ```
 
-- [ ] **Step 5: Typecheck/build the client**
-
-Run: `cd client && npm run build`
-Expected: `tsc -b && vite build` completes with no type errors. (The Action column may reference not-yet-added handlers; if so, temporarily keep the existing SABnzbd button so it compiles, and Task 6 replaces it. Prefer to do Task 6 before this build if the Action cell won't compile standalone.)
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add client/src/pages/SearchPage.tsx
-git commit -m "feat(client): sortable Name/Category/Age/Size/Grabs columns"
-```
+- [ ] **Step 5: Do NOT build or commit yet** — continue straight into Task 6
+(same file; it compiles only after Task 6's Action cell + state changes land).
 
 ---
 
-### Task 6: Arr-routed grab + Grabbed/Rejected/Error feedback
+### Task 6: Arr-routed grab + Grabbed/Rejected/Error feedback (same file)
 
 **Files:**
-- Modify: `client/src/pages/SearchPage.tsx`
+- Modify: `client/src/pages/SearchPage.tsx` (continues Task 5; single build + commit here)
 
-- [ ] **Step 1: Replace grab state and add routing + interpretation helpers**
+- [ ] **Step 1: Remove old grab code; add new grab state + helpers**
 
-Remove the old `sending`/`sent` state and `sendToSab` usage-as-primary. Add:
+**Delete these leftovers** (they're now unused and would fail `noUnusedLocals`,
+or reference removed cells): the `sending` and `sent` `useState` declarations,
+the entire `sendToSab` function, and any remaining old references. (`grabToSab`
+below replaces `sendToSab`.) Then add:
 
 ```tsx
   type GrabState = 'idle' | 'sending' | 'grabbed' | 'rejected' | 'error';
@@ -699,10 +707,15 @@ Replace the Action `<td>` with routing-aware buttons + feedback:
   {(() => {
     const g = grab[r.guid]?.state ?? 'idle';
     if (g === 'grabbed') return <span className="badge badge-success" title={grab[r.guid]?.msg}>Grabbed</span>;
-    if (g === 'rejected') return <span className="badge badge-danger" title={grab[r.guid]?.msg}>Rejected: {grab[r.guid]?.msg}</span>;
+    // rejected uses badge-warning (amber) to read as "heads up, add it to the library",
+    // distinct from error's badge-danger (red). Both classes exist in index.css.
+    if (g === 'rejected') return <span className="badge badge-warning" title={grab[r.guid]?.msg}>Rejected: {grab[r.guid]?.msg}</span>;
     if (g === 'sending') return <span className="placeholder">Sending…</span>;
 
     // Resolve target: filter first, then result category band.
+    // Note: when resolved === 'sab' (Audio 3xxx), there is deliberately NO
+    // Sonarr/Radarr branch below — only the "→ SAB" escape hatch renders, which
+    // is the intended primary action for Audio.
     const ft = filterTarget(category);
     const rt = bandTarget(r.categoryId);
     const resolved = ft ?? rt;
@@ -726,18 +739,23 @@ Replace the Action `<td>` with routing-aware buttons + feedback:
 </td>
 ```
 
-(If `badge-danger` isn't in the CSS, use the existing danger class — check `client/src/index.css` for the badge classes and match one that exists, e.g. `badge-warning` for rejected. Verify during Step 4.)
+(Badge classes `badge-success`, `badge-warning`, `badge-danger` and `btn-sm`/
+`btn-primary`/`placeholder` all exist in `client/src/index.css` — confirmed — so
+no substitution is needed.)
 
-- [ ] **Step 4: Typecheck/build the client**
+- [ ] **Step 4: Typecheck/build the client (the single gate for Tasks 5 + 6)**
 
 Run: `cd client && npm run build`
-Expected: no type errors; `client/dist` produced. Grep `client/src/index.css` for the badge class names you used and adjust to existing ones if needed.
+Expected: `tsc -b && vite build` completes with **no type errors** and produces
+`client/dist`. If `tsc` reports an unused local, it's almost certainly a leftover
+from the old grab code (Task 6 Step 1) or the `Send` import (Task 5 Step 1) —
+remove it.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Commit (the whole SearchPage rewrite, Tasks 5 + 6)**
 
 ```bash
 git add client/src/pages/SearchPage.tsx
-git commit -m "feat(client): route grabs to Sonarr/Radarr with Grabbed/Rejected feedback"
+git commit -m "feat(client): sortable columns + grab via Sonarr/Radarr with feedback"
 ```
 
 ---
@@ -758,8 +776,13 @@ Expected: no type errors.
 
 - [ ] **Step 3: No secrets committed**
 
-Run: `cd /c/Projects/NGConnect && git grep -iE "apikey=[a-z0-9]{8,}" -- server/ client/ || echo "no embedded keys - good"`
-Expected: "no embedded keys - good" (the fixture uses `apikey=REDACTED`).
+Run (note: **not** `-i`, and exclude the `REDACTED` placeholder — a
+case-insensitive `[a-z0-9]{8,}` matches the word REDACTED and false-positives):
+```bash
+cd /c/Projects/NGConnect
+git grep -nE "apikey=[A-Za-z0-9]{8,}" -- server/ client/ | grep -v "apikey=REDACTED" && echo "LEAK — real key committed" || echo "no embedded keys - good"
+```
+Expected: "no embedded keys - good" (the fixture's only `apikey=` values are `apikey=REDACTED`).
 
 ---
 
@@ -771,10 +794,11 @@ The Sonarr/Radarr integration can only be verified where the arrs are reachable 
 
 ```bash
 git checkout main
+git pull --ff-only origin main    # guard against a stale local main (origin may have advanced)
 git merge --no-ff feature/search-enhancements -m "feat: search page — sortable columns + grab via Sonarr/Radarr"
 git push origin main
 ```
-Expected: push succeeds; the server PC auto-deploys within the hour (or the user hits "Check for Updates Now").
+Expected: push succeeds; the server PC auto-deploys within the hour (or the user hits "Check for Updates Now"). **After each fix in Step 4, the user must wait for that redeploy (or trigger it) before re-testing, so they're not testing stale code.**
 
 - [ ] **Step 2: USER-RUN — grab something IN the library**
 
@@ -782,7 +806,7 @@ On the server PC, with ProtonVPN connected and SAB un-paused: open the Search pa
 
 - [ ] **Step 3: USER-RUN — grab something NOT in the library**
 
-Search something not in Sonarr/Radarr and Grab. Confirm the row shows **Rejected: \<reason\>** (e.g. "Unknown Series") rather than a silent failure.
+(VPN still connected, SAB still un-paused.) Search something not in Sonarr/Radarr and Grab. Confirm the row shows **Rejected: \<reason\>** (e.g. "Unknown Series") rather than a silent failure.
 
 - [ ] **Step 4: USER-RUN — if a grab shows "Error"**
 
