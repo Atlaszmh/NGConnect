@@ -42,6 +42,19 @@ if (-not (Test-Path $EnvFile)) {
     Write-Host "  [WARNING] No .env file found. Server may not work correctly." -ForegroundColor Yellow
 }
 
+# Ensure NODE_ENV=production so the server serves the built client (index.ts
+# gates static serving on NODE_ENV). The task loads .env via --env-file.
+# Note: only appends when .env already exists. Creating .env when absent is
+# intentionally left to install-updater.ps1 (this installer only warns), so the
+# two scripts don't both try to author a fresh .env.
+if (Test-Path $EnvFile) {
+    $envText = Get-Content $EnvFile -Raw
+    if ($envText -notmatch '(?m)^\s*NODE_ENV\s*=') {
+        Add-Content -Path $EnvFile -Value 'NODE_ENV=production'
+        Write-Host '  [OK] Added NODE_ENV=production to .env' -ForegroundColor Green
+    }
+}
+
 # Remove existing task if present
 $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($existing) {
@@ -75,12 +88,6 @@ Register-ScheduledTask `
     -Settings $settings `
     -Principal $principal `
     -Description "NGConnect media server dashboard - runs on port 3001" | Out-Null
-
-# Set NODE_ENV via the task's environment
-# (Scheduled Tasks inherit system env, so we set it in the arguments)
-$task = Get-ScheduledTask -TaskName $TaskName
-$task.Actions[0].Arguments = "--env-file=`"$EnvFile`" `"$ServerScript`""
-Set-ScheduledTask -InputObject $task | Out-Null
 
 Write-Host ""
 Write-Host "  [OK] NGConnect installed as startup task." -ForegroundColor Green
