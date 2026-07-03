@@ -1,7 +1,7 @@
 # Search Enhancements — Design Spec
 
 **Date:** 2026-07-02
-**Status:** Approved (pending spec review)
+**Status:** Approved
 **Author:** Zach + Claude
 
 ## Problem
@@ -165,6 +165,9 @@ specific `categoryId`; size from attr when no enclosure; malformed input
 ## Component 3: `nzbgeek.ts` new `POST /nzbgeek/send-to-arr`
 
 - Body `{ title, nzbUrl, pubDate, target }`, `target ∈ {'sonarr','radarr'}`.
+- **Validate inputs first** (parity with `send-to-sab`): `400` if `nzbUrl` or
+  `title` is missing, or if `target` is neither `'sonarr'` nor `'radarr'` —
+  never build a `downloadUrl` like `undefined&apikey=...`.
 - Build `downloadUrl` by appending the NZBGeek key exactly like `send-to-sab`
   (`nzbUrl.includes('apikey') ? nzbUrl : ${nzbUrl}&apikey=${config.nzbgeek.apiKey}`).
 - Pick `{ url, apiKey }` from `config.sonarr` or `config.radarr` by `target`
@@ -215,10 +218,13 @@ releases (display only — sort uses the raw timestamp).
 **Grab routing (replaces the single SAB button):**
 - Determine target band from the category code: **TV `5000–5999` → sonarr**,
   **Movies `2000–2999` → radarr**, **Audio `3000–3999` → SAB fallback**.
-  Precedence: if the **selected category filter** is unambiguous (a specific TV
-  or Movies code), use it; else use the **result's `categoryId`**; if still
-  ambiguous (e.g. filter = "All" and `categoryId` null/other), render **two
-  small buttons — "Sonarr" and "Radarr"** — for the user to choose.
+  Precedence: if the **selected category filter** is unambiguous, use it — a
+  TV code → sonarr, a Movies code → radarr, and **filter = Audio (3xxx) → the
+  primary action is the SAB path** (no arr target); else use the **result's
+  `categoryId`** band; if still ambiguous (e.g. filter = "All" and `categoryId`
+  null/other), render **two small buttons — "Sonarr" and "Radarr"** — for the
+  user to choose. (Routing only needs the thousands-band `Math.floor(code/1000)`;
+  TV 5xxx and Movie 2xxx never overlap, so any numeric code in the item is safe.)
 - Grab calls `api.post('/nzbgeek/send-to-arr', { title: r.title, nzbUrl: r.link,
   pubDate: r.pubDate, target })`.
 - A secondary, **less-prominent "→ SAB"** action (old `send-to-sab` path) is
@@ -233,9 +239,15 @@ releases (display only — sort uses the raw timestamp).
   the expected, informative case when the title doesn't match a monitored
   series/movie); non-2xx/`502`/network → **"Error"** with a short message.
 - Because `release/push`'s exact success/rejection shape is unverified live, the
-  client reads it defensively: treat `approved === true` OR (2xx with an empty/
-  absent `rejections`) as grabbed; any `rejections` array with entries as
-  rejected; anything else as error. The live test will confirm these fields.
+  client reads it defensively, in this order:
+  1. **Non-2xx from the arr (incl. a 500 on a bad/unmatched release) → Error**,
+     never Grabbed. This is the safe failure direction.
+  2. A decision carrying any `rejections` **or** `temporarilyRejected` entries →
+     **Rejected** (show the first reason). "Rejected" is the intentional
+     catch-all for both hard rejections and temporary holds — presence of any
+     such entries guarantees a rejected release is never misread as grabbed.
+  3. Otherwise (`approved === true`, or 2xx with no rejection entries) → Grabbed.
+  The live test confirms these fields.
 
 ## Data Flow
 
@@ -258,9 +270,10 @@ its own SAB client (correct category) → CDH → import → Plex refresh.
 | NZBGeek odd/empty JSON | parser → `[]`; 200 `{results:[]}`; "No results". |
 | Result missing grabs | `null` → renders `--`, sorts last. |
 | Result missing guid+link | skipped by parser. |
-| `send-to-arr` bad `target` | 400. |
+| `send-to-arr` missing `nzbUrl`/`title` or bad `target` | 400. |
 | arr unreachable | 502; row shows "Error". |
-| arr rejects (not in library / unmonitored) | 2xx decision with `rejections`; row shows "Rejected: \<reason\>". |
+| arr returns non-2xx (incl. 500 on a bad/unmatched release) | row shows "Error", never "Grabbed". |
+| arr rejects (not in library / unmonitored / temporary hold) | 2xx decision with `rejections`/`temporarilyRejected`; row shows "Rejected: \<reason\>". |
 | `protocol` value wrong (if it is) | arr returns an error body; route passes it through; row shows "Error" with the message — caught in the live test, then adjust. |
 
 ## Testing Strategy
@@ -285,8 +298,11 @@ its own SAB client (correct category) → CDH → import → Plex refresh.
   3. Search something **not** in the library → confirm a clear
      "Rejected: \<reason\>" (not a silent failure).
   4. Confirm no API keys appear in the browser Network tab.
-  5. If the grab errors on `protocol`, report the arr's error body — we switch
-     the value (e.g. capitalization) and you re-test.
+  5. If the grab errors, report the arr's error body — the likely culprits are
+     the `protocol` **value** (`"usenet"` vs `"Usenet"`) or, on older arr
+     versions, the field **name** (`protocol` vs `downloadProtocol`). We adjust
+     and you re-test. (Because the route passes the raw arr response through,
+     this shows as a clear "Error" with the arr's message, not a silent no-op.)
 
 ## Risks / Open Questions
 
