@@ -9,8 +9,11 @@ export const radarrRouter = Router();
 // Add a movie to the library AND kick off Radarr's own search (grab -> SAB -> import -> Plex).
 radarrRouter.post('/add-movie', async (req: Request, res: Response) => {
   const { tmdbId, imdbId } = req.body ?? {};
-  if (typeof tmdbId !== 'number' && typeof imdbId !== 'string') {
-    res.status(400).json({ error: 'tmdbId (number) or imdbId (string) is required' });
+  // Require a positive tmdbId or a string imdbId. A non-positive tmdbId is skipped
+  // by movieLookupTerm, so validating it here keeps bad input a 400, not a 502.
+  const hasTmdb = typeof tmdbId === 'number' && tmdbId > 0;
+  if (!hasTmdb && typeof imdbId !== 'string') {
+    res.status(400).json({ error: 'tmdbId (positive number) or imdbId (string) is required' });
     return;
   }
   try {
