@@ -8,6 +8,11 @@ import {
   updateKillSwitchConfig,
 } from '../services/vpnMonitor';
 import { getServiceHealth } from '../services/healthMonitor';
+import {
+  readDeployStatus,
+  triggerUpdateCheck,
+  DEPLOY_STATUS_PATH,
+} from '../services/deploy';
 
 export const systemRouter = Router();
 
@@ -102,4 +107,22 @@ systemRouter.get('/info', (_req: Request, res: Response) => {
 // Detailed health status from the health monitor
 systemRouter.get('/health/services', (_req: Request, res: Response) => {
   res.json(getServiceHealth());
+});
+
+// Current auto-deploy status (read from the updater's status file)
+systemRouter.get('/update/status', (_req: Request, res: Response) => {
+  res.json(readDeployStatus(DEPLOY_STATUS_PATH));
+});
+
+// Trigger an on-demand update check by starting the updater Scheduled Task.
+// Fire-and-return: does not run any git/build logic in this process.
+systemRouter.post('/update/check', async (_req: Request, res: Response) => {
+  const result = await triggerUpdateCheck();
+  if (result.triggered) {
+    res.json({ triggered: true });
+  } else if (result.reason === 'updater-not-installed') {
+    res.status(409).json({ triggered: false, reason: 'updater-not-installed' });
+  } else {
+    res.status(500).json({ triggered: false, reason: 'error', detail: result.detail });
+  }
 });
