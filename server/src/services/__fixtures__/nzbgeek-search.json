@@ -1,0 +1,1263 @@
+{
+  "@attributes": {
+    "version": "1.0"
+  },
+  "channel": {
+    "title": "api.nzbgeek.info",
+    "description": "NZBgeek API",
+    "link": "http://api.nzbgeek.info/",
+    "language": "en-gb",
+    "webMaster": "info@nzbgeek.info (NZBgeek)",
+    "category": {},
+    "image": {
+      "url": "https://api.nzbgeek.info/covers/nzbgeek.png",
+      "title": "api.nzbgeek.info",
+      "link": "http://api.nzbgeek.info/",
+      "description": "NZBgeek"
+    },
+    "response": {
+      "@attributes": {
+        "offset": "0",
+        "total": "873"
+      }
+    },
+    "item": [
+      {
+        "title": "The.Matrix.1999.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=23eceaeea42667c6cbd1605e90087d79",
+        "link": "https://api.nzbgeek.info/api?t=get&id=23eceaeea42667c6cbd1605e90087d79&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=23eceaeea42667c6cbd1605e90087d79",
+        "pubDate": "Mon, 29 Jun 2026 15:52:57 +0000",
+        "category": "Movies > SD",
+        "description": "The.Matrix.1999.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=23eceaeea42667c6cbd1605e90087d79&apikey=REDACTED",
+            "length": "9387696000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2030"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "9387696000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "23eceaeea42667c6cbd1605e90087d79"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtitle",
+              "value": "The Matrix"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdb",
+              "value": "00133093"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtagline",
+              "value": "Welcome to the Real World"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbplot",
+              "value": "Thomas A Anderson is a man living two lives By day he is an average computer programmer and by night a hacker known as Neo Neo has always questioned his reality, but the truth is far beyond his imagination Neo finds himself targeted by the police when he is contacted by Morpheus, a legendary computer hacker branded a terrorist by the government Morpheus awakens Neo to the real world, a ravaged wasteland where most of humanity have been captured by a race of machines that live off of the humans body heat and electrochemical energy and who imprison their minds within an artificial reality known as the Matrix As a rebel against the machines, Neo must return to the Matrix and confront the agents superpowerful computer programs devoted to snuffing out Neo and the entire human rebellion"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbscore",
+              "value": "8.7"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "genre",
+              "value": "Action, Sci-Fi"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbyear",
+              "value": "1999"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbdirector",
+              "value": "Lana Wachowski, Lilly Wachowski"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbactors",
+              "value": "Keanu Reeves, Laurence Fishburne, CarrieAnne Moss, Hugo Weaving"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/movies/00133093-cover.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "runtime",
+              "value": "136 min"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "language",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "subs",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "2137"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Mon, 29 Jun 2026 15:22:00 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Matrix.Revolutions.2003.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=2f45722a4fb93d828e68e803cfea44d6",
+        "link": "https://api.nzbgeek.info/api?t=get&id=2f45722a4fb93d828e68e803cfea44d6&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=2f45722a4fb93d828e68e803cfea44d6",
+        "pubDate": "Mon, 29 Jun 2026 15:52:57 +0000",
+        "category": "Movies > SD",
+        "description": "The.Matrix.Revolutions.2003.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=2f45722a4fb93d828e68e803cfea44d6&apikey=REDACTED",
+            "length": "9242120000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2030"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "9242120000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "2f45722a4fb93d828e68e803cfea44d6"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtitle",
+              "value": "The Matrix Revolutions"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdb",
+              "value": "00242653"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtagline",
+              "value": "Everything that has a beginning has an end"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbplot",
+              "value": "Neo discovers that somehow he is able to use his powers in the real world too and that his mind can be freed from his body, as a result of which he finds himself trapped on a train station between the Matrix and the Real World Meanwhile, Zion is preparing for the oncoming war with the machines with very little chances of survival Neos associates set out to free him from The Merovingian since its believed that he is the One who will end the war between humans and the machines What they do not know is that there is a threat from a third party, someone who has plans to destroy both the worlds"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbscore",
+              "value": "6.8"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "genre",
+              "value": "Action, Sci-Fi"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbyear",
+              "value": "2003"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbdirector",
+              "value": "Lana Wachowski, Lilly Wachowski"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbactors",
+              "value": "Keanu Reeves, Laurence Fishburne, CarrieAnne Moss, Mary Alice, Tanveer K Atwal, Helmut Bakaitis, Kate Beahan"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/movies/00242653-cover.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "runtime",
+              "value": "129 min"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "1093"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Mon, 29 Jun 2026 15:21:59 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Matrix.Revolutions.2003.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=2ac5b405477f6174d9e9e52e768bdb31",
+        "link": "https://api.nzbgeek.info/api?t=get&id=2ac5b405477f6174d9e9e52e768bdb31&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=2ac5b405477f6174d9e9e52e768bdb31",
+        "pubDate": "Mon, 29 Jun 2026 15:12:31 +0000",
+        "category": "Movies > HD",
+        "description": "The.Matrix.Revolutions.2003.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=2ac5b405477f6174d9e9e52e768bdb31&apikey=REDACTED",
+            "length": "7848630000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2040"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "7848630000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "2ac5b405477f6174d9e9e52e768bdb31"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtitle",
+              "value": "The Matrix Revolutions"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdb",
+              "value": "00242653"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtagline",
+              "value": "Everything that has a beginning has an end"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbplot",
+              "value": "Neo discovers that somehow he is able to use his powers in the real world too and that his mind can be freed from his body, as a result of which he finds himself trapped on a train station between the Matrix and the Real World Meanwhile, Zion is preparing for the oncoming war with the machines with very little chances of survival Neos associates set out to free him from The Merovingian since its believed that he is the One who will end the war between humans and the machines What they do not know is that there is a threat from a third party, someone who has plans to destroy both the worlds"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbscore",
+              "value": "6.8"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "genre",
+              "value": "Action, Sci-Fi"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbyear",
+              "value": "2003"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbdirector",
+              "value": "Lana Wachowski, Lilly Wachowski"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbactors",
+              "value": "Keanu Reeves, Laurence Fishburne, CarrieAnne Moss, Mary Alice, Tanveer K Atwal, Helmut Bakaitis, Kate Beahan"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/movies/00242653-cover.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "runtime",
+              "value": "129 min"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "language",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "subs",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "988"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Mon, 29 Jun 2026 15:11:19 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Matrix.1999.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=f00570b7fedf94f89dddd54dbc952695",
+        "link": "https://api.nzbgeek.info/api?t=get&id=f00570b7fedf94f89dddd54dbc952695&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=f00570b7fedf94f89dddd54dbc952695",
+        "pubDate": "Mon, 29 Jun 2026 15:10:12 +0000",
+        "category": "Movies > HD",
+        "description": "The.Matrix.1999.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=f00570b7fedf94f89dddd54dbc952695&apikey=REDACTED",
+            "length": "7981376000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2040"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "7981376000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "f00570b7fedf94f89dddd54dbc952695"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtitle",
+              "value": "The Matrix"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdb",
+              "value": "00133093"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtagline",
+              "value": "Welcome to the Real World"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbplot",
+              "value": "Thomas A Anderson is a man living two lives By day he is an average computer programmer and by night a hacker known as Neo Neo has always questioned his reality, but the truth is far beyond his imagination Neo finds himself targeted by the police when he is contacted by Morpheus, a legendary computer hacker branded a terrorist by the government Morpheus awakens Neo to the real world, a ravaged wasteland where most of humanity have been captured by a race of machines that live off of the humans body heat and electrochemical energy and who imprison their minds within an artificial reality known as the Matrix As a rebel against the machines, Neo must return to the Matrix and confront the agents superpowerful computer programs devoted to snuffing out Neo and the entire human rebellion"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbscore",
+              "value": "8.7"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "genre",
+              "value": "Action, Sci-Fi"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbyear",
+              "value": "1999"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbdirector",
+              "value": "Lana Wachowski, Lilly Wachowski"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbactors",
+              "value": "Keanu Reeves, Laurence Fishburne, CarrieAnne Moss, Hugo Weaving"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/movies/00133093-cover.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "runtime",
+              "value": "136 min"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "language",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "subs",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "1568"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Mon, 29 Jun 2026 15:08:30 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Matrix.Reloaded.2003.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=4b82e63725b90aee67d72d01fd5328c4",
+        "link": "https://api.nzbgeek.info/api?t=get&id=4b82e63725b90aee67d72d01fd5328c4&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=4b82e63725b90aee67d72d01fd5328c4",
+        "pubDate": "Mon, 29 Jun 2026 15:38:42 +0000",
+        "category": "Movies > HD",
+        "description": "The.Matrix.Reloaded.2003.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=4b82e63725b90aee67d72d01fd5328c4&apikey=REDACTED",
+            "length": "9930435000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2040"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "9930435000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "4b82e63725b90aee67d72d01fd5328c4"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtitle",
+              "value": "The Matrix Reloaded"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdb",
+              "value": "00234215"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtagline",
+              "value": "Free your mind"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbplot",
+              "value": "Six months after the events depicted in The Matrix, Neo has proved to be a good omen for the free humans, as more and more humans are being freed from the matrix and brought to Zion, the one and only stronghold of the Resistance Neo himself has discovered his superpowers including super speed, ability to see the codes of the things inside the matrix, and a certain degree of precognition But a nasty piece of news hits the human resistance 250,000 machine sentinels are digging to Zion and would reach them in 72 hours As Zion prepares for the ultimate war, Neo, Morpheus and Trinity are advised by the Oracle to find the Keymaker who would help them reach the Source Meanwhile Neos recurrent dreams depicting Trinitys death have got him worried and as if it was not enough, Agent Smith has somehow escaped deletion, has become more powerful than before and has chosen Neo as his next target"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbscore",
+              "value": "7.2"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "genre",
+              "value": "Action, Sci-Fi"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbyear",
+              "value": "2003"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbdirector",
+              "value": "Lana Wachowski, Lilly Wachowski"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbactors",
+              "value": "Ray Anthony, Christine Anu, Andy Arness, Alima AshtonSheibu"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/movies/00234215-cover.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "runtime",
+              "value": "138 min"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "language",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "subs",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "1633"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Mon, 29 Jun 2026 15:07:34 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "1"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Matrix.Reloaded.2003.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=316be3e27770c05a745049b547594ce7",
+        "link": "https://api.nzbgeek.info/api?t=get&id=316be3e27770c05a745049b547594ce7&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=316be3e27770c05a745049b547594ce7",
+        "pubDate": "Mon, 29 Jun 2026 15:00:39 +0000",
+        "category": "Movies > HD",
+        "description": "The.Matrix.Reloaded.2003.1080p.YT.WEB-DL.DDP.5.1.H.264-PiRaTeS",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=316be3e27770c05a745049b547594ce7&apikey=REDACTED",
+            "length": "8439984000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2040"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "8439984000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "316be3e27770c05a745049b547594ce7"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtitle",
+              "value": "The Matrix Reloaded"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdb",
+              "value": "00234215"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtagline",
+              "value": "Free your mind"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbplot",
+              "value": "Six months after the events depicted in The Matrix, Neo has proved to be a good omen for the free humans, as more and more humans are being freed from the matrix and brought to Zion, the one and only stronghold of the Resistance Neo himself has discovered his superpowers including super speed, ability to see the codes of the things inside the matrix, and a certain degree of precognition But a nasty piece of news hits the human resistance 250,000 machine sentinels are digging to Zion and would reach them in 72 hours As Zion prepares for the ultimate war, Neo, Morpheus and Trinity are advised by the Oracle to find the Keymaker who would help them reach the Source Meanwhile Neos recurrent dreams depicting Trinitys death have got him worried and as if it was not enough, Agent Smith has somehow escaped deletion, has become more powerful than before and has chosen Neo as his next target"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbscore",
+              "value": "7.2"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "genre",
+              "value": "Action, Sci-Fi"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbyear",
+              "value": "2003"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbdirector",
+              "value": "Lana Wachowski, Lilly Wachowski"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbactors",
+              "value": "Ray Anthony, Christine Anu, Andy Arness, Alima AshtonSheibu"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/movies/00234215-cover.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "runtime",
+              "value": "138 min"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "language",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "subs",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "1174"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Mon, 29 Jun 2026 14:59:30 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Matrix.Reloaded.2003.2160p.MA.WEB-DL.H.265.DV.DDP5.1.Atmos-HHWEB",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=4b1d7f2972b34db78effdf5cc616f7c9",
+        "link": "https://api.nzbgeek.info/api?t=get&id=4b1d7f2972b34db78effdf5cc616f7c9&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=4b1d7f2972b34db78effdf5cc616f7c9",
+        "pubDate": "Thu, 25 Jun 2026 14:37:41 +0000",
+        "category": "Movies > UHD",
+        "description": "The.Matrix.Reloaded.2003.2160p.MA.WEB-DL.H.265.DV.DDP5.1.Atmos-HHWEB",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=4b1d7f2972b34db78effdf5cc616f7c9&apikey=REDACTED",
+            "length": "27460758000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2045"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "27460758000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "4b1d7f2972b34db78effdf5cc616f7c9"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtitle",
+              "value": "The Matrix Reloaded"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdb",
+              "value": "00234215"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtagline",
+              "value": "Free your mind"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbplot",
+              "value": "Six months after the events depicted in The Matrix, Neo has proved to be a good omen for the free humans, as more and more humans are being freed from the matrix and brought to Zion, the one and only stronghold of the Resistance Neo himself has discovered his superpowers including super speed, ability to see the codes of the things inside the matrix, and a certain degree of precognition But a nasty piece of news hits the human resistance 250,000 machine sentinels are digging to Zion and would reach them in 72 hours As Zion prepares for the ultimate war, Neo, Morpheus and Trinity are advised by the Oracle to find the Keymaker who would help them reach the Source Meanwhile Neos recurrent dreams depicting Trinitys death have got him worried and as if it was not enough, Agent Smith has somehow escaped deletion, has become more powerful than before and has chosen Neo as his next target"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbscore",
+              "value": "7.2"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "genre",
+              "value": "Action, Sci-Fi"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbyear",
+              "value": "2003"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbdirector",
+              "value": "Lana Wachowski, Lilly Wachowski"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbactors",
+              "value": "Ray Anthony, Christine Anu, Andy Arness, Alima AshtonSheibu"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/movies/00234215-cover.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "runtime",
+              "value": "138 min"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "language",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "subs",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "588"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "1"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Thu, 25 Jun 2026 14:36:43 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      },
+      {
+        "title": "The.Matrix.Revolutions.2003.2160p.MA.WEB-DL.H.265.DV.DDP5.1.Atmos-HHWEB",
+        "guid": "https://nzbgeek.info/geekseek.php?guid=59c0424406cd86d59d1fa23cdd1addcb",
+        "link": "https://api.nzbgeek.info/api?t=get&id=59c0424406cd86d59d1fa23cdd1addcb&apikey=REDACTED",
+        "comments": "https://nzbgeek.info/geekseek.php?guid=59c0424406cd86d59d1fa23cdd1addcb",
+        "pubDate": "Thu, 25 Jun 2026 12:16:57 +0000",
+        "category": "Movies > UHD",
+        "description": "The.Matrix.Revolutions.2003.2160p.MA.WEB-DL.H.265.DV.DDP5.1.Atmos-HHWEB",
+        "enclosure": {
+          "@attributes": {
+            "url": "http://api.nzbgeek.info/api?t=get&id=59c0424406cd86d59d1fa23cdd1addcb&apikey=REDACTED",
+            "length": "25856703000",
+            "type": "application/x-nzb"
+          }
+        },
+        "attr": [
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "category",
+              "value": "2045"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "size",
+              "value": "25856703000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "guid",
+              "value": "59c0424406cd86d59d1fa23cdd1addcb"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtitle",
+              "value": "The Matrix Revolutions"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdb",
+              "value": "00242653"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbtagline",
+              "value": "Everything that has a beginning has an end"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbplot",
+              "value": "Neo discovers that somehow he is able to use his powers in the real world too and that his mind can be freed from his body, as a result of which he finds himself trapped on a train station between the Matrix and the Real World Meanwhile, Zion is preparing for the oncoming war with the machines with very little chances of survival Neos associates set out to free him from The Merovingian since its believed that he is the One who will end the war between humans and the machines What they do not know is that there is a threat from a third party, someone who has plans to destroy both the worlds"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbscore",
+              "value": "6.8"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "genre",
+              "value": "Action, Sci-Fi"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbyear",
+              "value": "2003"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbdirector",
+              "value": "Lana Wachowski, Lilly Wachowski"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "imdbactors",
+              "value": "Keanu Reeves, Laurence Fishburne, CarrieAnne Moss, Mary Alice, Tanveer K Atwal, Helmut Bakaitis, Kate Beahan"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "coverurl",
+              "value": "https://api.nzbgeek.info/covers/movies/00242653-cover.jpg"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "runtime",
+              "value": "129 min"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "language",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "subs",
+              "value": "English"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "grabs",
+              "value": "472"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "comments",
+              "value": "1"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "password",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "usenetdate",
+              "value": "Thu, 25 Jun 2026 12:14:52 +0000"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsup",
+              "value": "0"
+            }
+          },
+          {
+            "@attributes": {
+              "name": "thumbsdown",
+              "value": "0"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
