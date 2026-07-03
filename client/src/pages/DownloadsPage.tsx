@@ -42,6 +42,7 @@ interface HistoryItem {
   quality: string | null;
   sizeBytes: number | null;
   date: string;
+  reason: string | null;
 }
 
 interface QueueData {
@@ -328,7 +329,10 @@ export default function DownloadsPage() {
               <tbody>
                 {history.map((item) => (
                   <tr key={item.id}>
-                    <td className="name-cell">{item.title}</td>
+                    <td className="name-cell">
+                      {item.title}
+                      {item.reason && <div className="history-fail-reason">{item.reason}</div>}
+                    </td>
                     <td>
                       <span className="badge">{item.kind === 'tv' ? 'TV' : 'Movie'}</span>
                     </td>

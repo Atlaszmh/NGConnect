@@ -1290,3 +1290,10 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+.history-fail-reason {
+  white-space: normal;
+  color: var(--color-danger);
+  font-size: 0.8em;
+  margin-top: 3px;
+}
