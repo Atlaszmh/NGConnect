@@ -1,7 +1,7 @@
 # Search Enhancements — Design Spec
 
 **Date:** 2026-07-02
-**Status:** Approved (pending spec review)
+**Status:** Approved
 **Author:** Zach + Claude
 
 ## Problem
@@ -129,7 +129,8 @@ export function parseNewznabResults(raw: unknown): NzbResult[];
 - Field extraction (all defensive; bad/missing → the documented default):
   - `guid`: per the guid helper above; fall back to `link`.
   - `title`: `item.title` → `''`.
-  - `link`: `item.link` → `''` (string form; coerce if it's an object).
+  - `link`: `item.link` → `''` (reuse the same `asString` helper as `guid`, in
+    case it's an object).
   - `category`: attr `category` → `item.category` → `''`.
   - `sizeBytes`: `enclosure["@attributes"].length` → attr `size` →
     `item.size`, parsed as an integer; non-numeric → `0`.
@@ -232,6 +233,11 @@ the row's `link` exactly as today.
   the operator paste one sample. The `@attributes` nesting is already confirmed
   by the repo's existing `enclosure['@attributes']` usage, but the fixture
   locks the parser to reality and prevents a repeat of the original shape guess.
+  **Redaction (required):** the API key appears not just in the request URL but
+  **inside each item's `link` and `enclosure["@attributes"].url`** (Newznab
+  embeds `&apikey=<key>` there). Before committing the fixture, replace every
+  occurrence of the real key with `REDACTED` across the whole file. The parser
+  only needs the JSON *shape*, so redacted URLs are fine for tests.
 - **Parser (real logic):** vitest unit tests using the captured fixture plus the
   synthetic edge cases (single-item, single-attr, missing grabs/files, guid
   object, malformed input), added to the existing server suite
