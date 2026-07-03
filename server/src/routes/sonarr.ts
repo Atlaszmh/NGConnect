@@ -13,8 +13,8 @@ sonarrRouter.post('/add-series', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'tvdbId (positive number) is required' });
     return;
   }
-  if (seasons !== undefined && (!Array.isArray(seasons) || !seasons.every((n) => typeof n === 'number'))) {
-    res.status(400).json({ error: 'seasons must be an array of numbers' });
+  if (seasons !== undefined && (!Array.isArray(seasons) || !seasons.every((n) => Number.isInteger(n) && n >= 0))) {
+    res.status(400).json({ error: 'seasons must be an array of non-negative integers' });
     return;
   }
   try {
