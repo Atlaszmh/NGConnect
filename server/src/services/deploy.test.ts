@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { readDeployStatus, DEFAULT_DEPLOY_STATUS } from './deploy';
+import { readDeployStatus, classifyTriggerResult, DEFAULT_DEPLOY_STATUS } from './deploy';
 
 const tmpFiles: string[] = [];
 function tmpFile(contents: string): string {
@@ -50,9 +50,21 @@ describe('readDeployStatus', () => {
       sha: 'abc1234',
     });
   });
-});
 
-import { classifyTriggerResult } from './deploy';
+  it('returns the default when the JSON is a top-level array', () => {
+    const p = tmpFile('[1,2,3]');
+    expect(readDeployStatus(p)).toEqual(DEFAULT_DEPLOY_STATUS);
+  });
+
+  it('coerces an invalid result to "unknown"', () => {
+    const p = tmpFile(JSON.stringify({ result: 'bogus', sha: 'abc1234' }));
+    expect(readDeployStatus(p)).toEqual({
+      ...DEFAULT_DEPLOY_STATUS,
+      result: 'unknown',
+      sha: 'abc1234',
+    });
+  });
+});
 
 describe('classifyTriggerResult', () => {
   it('reports triggered when there is no error', () => {

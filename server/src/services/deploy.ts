@@ -1,5 +1,9 @@
 import fs from 'fs';
 import path from 'path';
+import { execFile } from 'child_process';
+import { createServiceLogger } from './logger';
+
+const log = createServiceLogger('deploy');
 
 export interface DeployStatus {
   sha: string | null;
@@ -25,21 +29,36 @@ export const DEPLOY_STATUS_PATH = path.resolve(
   '../../../deploy/.deploy-status.json'
 );
 
+const VALID_RESULTS: ReadonlyArray<DeployStatus['result']> = [
+  'up-to-date',
+  'updated',
+  'failed',
+  'unknown',
+];
+
 /**
  * Read and parse the updater's status file. Never throws: any problem
- * (missing file, unreadable, corrupt JSON) yields DEFAULT_DEPLOY_STATUS.
+ * (missing file, unreadable, corrupt JSON, or a partial/garbage file caught
+ * mid-write by the updater) yields a safe result. Non-object JSON falls back to
+ * DEFAULT_DEPLOY_STATUS; a merged status with an unrecognized `result` is
+ * coerced to 'unknown'.
  */
 export function readDeployStatus(filePath: string): DeployStatus {
   try {
     const raw = fs.readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(raw) as Partial<DeployStatus>;
-    return { ...DEFAULT_DEPLOY_STATUS, ...parsed };
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return DEFAULT_DEPLOY_STATUS;
+    }
+    const merged = { ...DEFAULT_DEPLOY_STATUS, ...(parsed as Partial<DeployStatus>) };
+    if (!VALID_RESULTS.includes(merged.result)) {
+      merged.result = 'unknown';
+    }
+    return merged;
   } catch {
     return DEFAULT_DEPLOY_STATUS;
   }
 }
-
-import { execFile } from 'child_process';
 
 export interface TriggerResult {
   triggered: boolean;
@@ -77,7 +96,15 @@ export function triggerUpdateCheck(): Promise<TriggerResult> {
       ['/run', '/tn', TASK_NAME],
       { windowsHide: true },
       (error, _stdout, stderr) => {
-        resolve(classifyTriggerResult(error, stderr ?? ''));
+        const result = classifyTriggerResult(error, stderr ?? '');
+        if (!result.triggered) {
+          log.error('Failed to trigger updater task', {
+            reason: result.reason,
+            error: error?.message,
+            stderr: stderr ?? '',
+          });
+        }
+        resolve(result);
       }
     );
   });
