@@ -1,7 +1,7 @@
 # Add-Show Season Selection — Design Spec
 
 **Date:** 2026-07-03
-**Status:** Approved (pending spec review)
+**Status:** Approved
 **Author:** Zach + Claude
 
 ## Problem
@@ -105,7 +105,10 @@ Behavior for the `seasons[]` mapping (over `lookupSeries.seasons`):
 - Per search result, render a **season checklist** from `r.seasons`, **excluding
   season 0** (specials). Each real season is a labeled checkbox ("S1", "S2", …),
   **all checked by default**. Track the checked set in component state keyed by
-  result index.
+  result index (consistent with the existing `addState` map).
+  - **Reset this checked-season state in `searchForShow()`** alongside the
+    existing `addState`/`searchResults` resets — otherwise a stale selection from
+    a prior search bleeds into the new results at the same index.
   - A compact "All / None" toggle is a nice-to-have; not required for v1.
 - The **"Add" button is disabled when zero seasons are checked** (can't add a
   show monitoring nothing).
