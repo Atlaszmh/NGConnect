@@ -51,3 +51,37 @@ describe('readDeployStatus', () => {
     });
   });
 });
+
+import { classifyTriggerResult } from './deploy';
+
+describe('classifyTriggerResult', () => {
+  it('reports triggered when there is no error', () => {
+    expect(classifyTriggerResult(null, '')).toEqual({ triggered: true });
+  });
+
+  it('reports updater-not-installed when schtasks cannot find the task', () => {
+    const stderr = 'ERROR: The system cannot find the file specified.';
+    const err = new Error('Command failed');
+    expect(classifyTriggerResult(err, stderr)).toEqual({
+      triggered: false,
+      reason: 'updater-not-installed',
+    });
+  });
+
+  it('reports updater-not-installed on the "does not exist" phrasing', () => {
+    const stderr = 'ERROR: The specified task name "NGConnect Updater" does not exist in the system.';
+    const err = new Error('Command failed');
+    expect(classifyTriggerResult(err, stderr)).toEqual({
+      triggered: false,
+      reason: 'updater-not-installed',
+    });
+  });
+
+  it('reports a generic error for any other failure', () => {
+    const stderr = 'ERROR: Access is denied.';
+    const err = new Error('Command failed');
+    const result = classifyTriggerResult(err, stderr);
+    expect(result.triggered).toBe(false);
+    expect(result.reason).toBe('error');
+  });
+});
