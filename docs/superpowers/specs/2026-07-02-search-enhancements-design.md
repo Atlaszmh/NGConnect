@@ -45,15 +45,26 @@ already present in the API response but are discarded.
   (verified by grep across `client/`), so changing its response shape is safe.
   The `send-to-sab` POST takes `{ title, nzbUrl }` where `nzbUrl` is the result's
   `link` — the normalized shape preserves `link`, so that path is unaffected.
-- **Newznab response quirks** the parser must absorb:
+- **Newznab response quirks** the parser must absorb (the `@attributes` nesting
+  is the standard XML→JSON convention and is **confirmed in this repo**: the
+  existing SearchPage already reads `enclosure?.['@attributes']?.length`):
   - Results live at `channel.item` (sometimes just `item`); a single result may
     be an object rather than a one-element array.
-  - Extended fields come as `newznab:attr` → JSON `attr`, either an array of
-    `{ name, value }` or (for a single attr) a lone object.
-  - Size may appear as an `enclosure["@attributes"].length`, as an attr named
-    `size`, or as a top-level `size`.
+  - Extended fields come as `newznab:attr` → JSON `attr`, an array whose each
+    element is `{ "@attributes": { "name": "...", "value": "..." } }` (name and
+    value are **nested under `@attributes`**, not flat). For a single attr, `attr`
+    may be a lone such object instead of an array.
+  - `enclosure` is likewise `{ "@attributes": { url, length, type } }`; size is
+    `enclosure["@attributes"].length`, or an attr named `size`, or a top-level
+    `size`.
+  - `guid` is often `{ "@attributes": { isPermaLink }, "text": "<id>" }` (or a
+    plain string on some indexers) — not guaranteed to be a bare string.
   - `grabs`, `files`, `usenetdate` are standard Newznab attrs but any of them
     can be absent for a given result/indexer.
+  - **Fixtures for the parser tests MUST be captured from a real NZBGeek
+    `o=json` response** (API key redacted), not hand-invented — this shape was
+    the one place the original design guessed wrong, so the tests must be
+    grounded in reality (see Testing Strategy).
 - **Testing convention:** the server unit-tests pure functions with vitest
   (`parseVpnStatus`, `readDeployStatus`, `classifyTriggerResult`). This feature
   follows that pattern.
@@ -104,13 +115,21 @@ export function parseNewznabResults(raw: unknown): NzbResult[];
 **Behavior:**
 - Locate the items array from `raw.channel.item` or `raw.item`; if it's a single
   object, wrap it in an array; if absent/not-an-object, return `[]`.
-- For each item, read a helper that flattens `attr` (array **or** single object)
-  into a `Map<string,string>` for O(1) lookups (`grabs`, `files`, `usenetdate`,
-  `size`, `category`, …).
+- **`attrMap(item)` helper** → `Map<string,string>` keyed by attr name: iterate
+  `item.attr` (normalize a lone object to a one-element array), and for each
+  element read the name/value from `el["@attributes"]` (the confirmed nested
+  shape). As cheap insurance against indexer variation, also fall back to a flat
+  `el.name`/`el.value` if `@attributes` is absent. Keys: `grabs`, `files`,
+  `usenetdate`, `size`, `category`, …
+- **`asString(x)` / guid helper**: `guid` may be a string OR an object like
+  `{ "@attributes": {...}, "text": "<id>" }`. Extract the string form: if
+  `item.guid` is a string use it; else use `item.guid.text` (or
+  `item.guid["#text"]`); else fall back to `link`. The result MUST be a usable
+  string (used as the React `key` and in send-to-sab).
 - Field extraction (all defensive; bad/missing → the documented default):
-  - `guid`: `item.guid` (string form) — fall back to `link` if missing.
+  - `guid`: per the guid helper above; fall back to `link`.
   - `title`: `item.title` → `''`.
-  - `link`: `item.link` → `''`.
+  - `link`: `item.link` → `''` (string form; coerce if it's an object).
   - `category`: attr `category` → `item.category` → `''`.
   - `sizeBytes`: `enclosure["@attributes"].length` → attr `size` →
     `item.size`, parsed as an integer; non-numeric → `0`.
@@ -121,15 +140,18 @@ export function parseNewznabResults(raw: unknown): NzbResult[];
 - **Never throws.** Any structural surprise yields `[]` or per-field defaults.
 - Items without a usable `guid` **and** `link` are skipped (can't be actioned).
 
-**Unit tests** (`server/src/services/newznab.test.ts`), fixtures based on real
-Newznab JSON shapes:
-- Normal multi-item response → correct count and field values (grabs/files as
-  numbers, size parsed from enclosure).
+**Unit tests** (`server/src/services/newznab.test.ts`). **The primary fixture
+MUST be a real captured NZBGeek `o=json` response** (see Testing Strategy) so the
+`@attributes` shape is validated against reality, not re-guessed. Cases:
+- Real captured response → correct count and field values (grabs/files as
+  numbers from `attr[i]["@attributes"]`, size parsed from
+  `enclosure["@attributes"].length`, guid extracted to a string).
 - Single-item response (`item` is an object, not an array) → one result.
-- Single-attr item (`attr` is one object, not an array) → parsed correctly.
+- Single-attr item (`attr` is one `@attributes` object, not an array) → parsed.
 - Missing `grabs`/`files` attrs → `null` (not `0`, so sorting can push them to
   the bottom).
 - Size from an attr named `size` when no enclosure is present.
+- guid given as `{ "@attributes": {...}, "text": "abc" }` → `guid === 'abc'`.
 - Malformed input (`null`, `{}`, `{channel:{}}`, a string) → `[]`, no throw.
 
 ## Component 2: `nzbgeek.ts` `/search` route change
@@ -147,6 +169,10 @@ Newznab JSON shapes:
 - Replace the local `NzbResult` interface and the `res.data?.channel?.item`
   guessing with: `const results = res.data?.results ?? []` typed to the new
   shape (a local interface mirroring the server's `NzbResult`).
+- **`SortKey`** is exactly `'title' | 'category' | 'pubDate' | 'sizeBytes' |
+  'files' | 'grabs'`. The **Age** column header maps to the `pubDate` key (Age
+  is derived from `pubDate`, it has no field of its own); the other five headers
+  map to their like-named keys. This keeps headers and sortable keys in lockstep.
 - Columns: **Name, Category, Age, Size, Files, Grabs**, then the existing
   **Action** (Send to SABnzbd) column. `Files`/`Grabs` render `--` when `null`.
 - **Sort state:** `{ key: SortKey | null; dir: 'asc' | 'desc' }`, initially
@@ -163,7 +189,13 @@ Newznab JSON shapes:
   - `Name`/`Category` sort with `localeCompare` (case-insensitive).
   - **Missing values sort last** regardless of direction: `null` files/grabs,
     `sizeBytes === 0`, and unparseable/empty `pubDate` always sink to the
-    bottom, so a real ranking isn't polluted by unknowns at the top.
+    bottom, so a real ranking isn't polluted by unknowns at the top. (Note:
+    `sizeBytes === 0` intentionally conflates "genuinely 0 bytes" with "unknown
+    size" — acceptable, since a real release is never 0 bytes.)
+  - **Stable tie-break:** when two rows compare equal on the active key, preserve
+    their original (indexer) order. Implement by carrying each row's original
+    index and using it as the secondary comparator, so sorting is deterministic
+    across browsers rather than relying on `Array.sort` stability alone.
   - Sorting is applied to a copy (never mutate state); rendering maps the sorted
     array. Re-sorting is pure/derived from `results` + sort state.
 - `formatSize` stays. `formatAge` is extended to also express months for old
@@ -190,8 +222,20 @@ the row's `link` exactly as today.
 
 ## Testing Strategy
 
-- **Parser (real logic):** vitest unit tests per the fixtures above, added to the
-  existing server suite (`npm test` in `server/`).
+- **Capture a real fixture FIRST (gates the parser work).** Before writing the
+  parser, obtain one real NZBGeek `o=json` response and save it (API key/URL
+  redacted) as a test fixture, e.g. `server/src/services/__fixtures__/
+  nzbgeek-search.json`. This is the source of truth for the `@attributes` shape.
+  Ways to get it: run the dev PC's server with a configured `.env` and
+  `curl 'http://localhost:3001/api/...'`; or capture directly from
+  `https://api.nzbgeek.info/api?t=search&o=json&q=<term>&apikey=<key>`; or have
+  the operator paste one sample. The `@attributes` nesting is already confirmed
+  by the repo's existing `enclosure['@attributes']` usage, but the fixture
+  locks the parser to reality and prevents a repeat of the original shape guess.
+- **Parser (real logic):** vitest unit tests using the captured fixture plus the
+  synthetic edge cases (single-item, single-attr, missing grabs/files, guid
+  object, malformed input), added to the existing server suite
+  (`npm test` in `server/`).
 - **Route:** covered indirectly; the meaningful logic is the parser. A light
   check that the route returns `{ results }` can be manual/e2e.
 - **Client:** no client test framework, so verify by `npm run build` (typecheck)
@@ -218,6 +262,8 @@ the row's `link` exactly as today.
 **New:**
 - `server/src/services/newznab.ts` — `NzbResult` type + `parseNewznabResults`.
 - `server/src/services/newznab.test.ts` — parser unit tests.
+- `server/src/services/__fixtures__/nzbgeek-search.json` — a **real** captured
+  NZBGeek `o=json` response (key/URL redacted), the parser's ground-truth fixture.
 - `docs/superpowers/specs/2026-07-02-search-enhancements-design.md` (this file).
 
 **Modified:**
