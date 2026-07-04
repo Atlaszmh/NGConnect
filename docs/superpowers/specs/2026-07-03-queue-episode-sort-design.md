@@ -106,6 +106,38 @@ This gathers+orders each show's episodes among themselves while every
 non-episode keeps its absolute queue index (a movie at index 2 stays at index 2;
 episodes reorder around it).
 
+**Grouping-key note:** grouping is purely by the normalized `show` string, so two
+genuinely different shows whose names normalize identically would be merged into
+one group (and one show under two spellings that normalize differently would form
+two groups). With standardized arr filenames this is a non-issue in practice
+(see Non-Goals); the rule stays deterministic either way.
+
+### Worked examples (canonical `episodeSortOrder` fixtures)
+
+**Multi-show + a held movie** — grouping and ordering around a fixed non-episode:
+```
+current                          desired
+0  ShowB S01E02                  0  ShowB S01E01
+1  ShowA S01E01                  1  ShowB S01E02
+2  Movie            (fixed →)    2  Movie
+3  ShowB S01E01                  3  ShowA S01E01
+4  ShowA S01E02                  4  ShowA S01E02
+```
+Movie is fixed at index 2. Episode slots = {0,1,3,4}. Show order by min current
+index: ShowB (min 0) before ShowA (min 1). Sorted episodes fill the freed slots.
+
+**One show split by a held movie** — episodes end up ordered but non-contiguous:
+```
+current                          desired
+0  ShowA S01E03                  0  ShowA S01E01
+1  Movie            (fixed →)    1  Movie
+2  ShowA S01E01                  2  ShowA S01E02
+3  ShowA S01E02                  3  ShowA S01E03
+```
+Movie holds index 1; ShowA's E01/E02/E03 fill slots {0,2,3} in order — so E01 sits
+above the movie and E02/E03 below it. This is the intended "hold position"
+tradeoff, not a bug.
+
 **`planMoves(currentIds: string[], desiredIds: string[]): { nzo_id: string; position: number }[]`**
 - Transforms `current` → `desired` as a minimal sequence of "move item to
   position i" ops (each maps 1:1 to a SAB `switch` call). Walk `i = 0…N-1`; if
@@ -118,7 +150,9 @@ episodes reorder around it).
 
 - In-memory `queueSortConfig = { enabled: true, pollIntervalMs: 15000 }` with
   `getQueueSortConfig()` and `updateQueueSortConfig(partial)` (restart the
-  interval if the interval changed) — the kill-switch shape.
+  interval if the interval changed) — the kill-switch shape. `updateQueueSortConfig`
+  **clamps `pollIntervalMs` to a floor** (e.g. `Math.max(5000, …)`) so a bad
+  `PUT` value can't make the loop hammer SAB.
 - `startQueueSorter()/stopQueueSorter()` — `setInterval(tick, pollIntervalMs)`.
 - `tick()`: if `!enabled`, return. Fetch `mode=queue` from SAB (key server-side).
   Build `slots` (`nzo_id`, `filename`), compute `desired = episodeSortOrder(slots)`,
@@ -133,7 +167,10 @@ Mirror the kill-switch endpoints:
 - `GET /system/queue-sort` → `getQueueSortConfig()`.
 - `PUT /system/queue-sort` → `updateQueueSortConfig(req.body)` then return the
   config. Body: `{ enabled?: boolean; pollIntervalMs?: number }` (validate types;
-  ignore unknown keys).
+  ignore unknown keys). Note: this is **stricter than** the mirrored
+  `PUT /vpn/killswitch`, which passes `req.body` through unvalidated — validate
+  here rather than copy-pasting that handler. The floor-clamp lives in
+  `updateQueueSortConfig` (above), so the route need only type-check.
 
 ## Component 3: wiring — `server/src/index.ts`
 
@@ -174,6 +211,8 @@ poll shows the sorted queue. Toggle OFF → `tick()` no-ops and drag re-enables.
 - **`parseEpisode` (pure):** standard `S01E05`; lowercase `s1e5`; dot vs space vs
   underscore separators; multi-episode `S01E01E02` → episode 1; season pack `S01`
   → null; movie `Movie.Name.2021.1080p` → null; daily `Show.2024.01.15` → null;
+  a separator between the S- and E- blocks (`S01.E01`) — assert the intended
+  behavior explicitly (the immediate-`e` regex treats it as non-episode → null);
   show-name normalization.
 - **`episodeSortOrder` (pure):** the multi-show before→after example (ShowB/ShowA
   interleaved → grouped+ordered); non-episode held at its absolute index while
@@ -189,7 +228,11 @@ poll shows the sorted queue. Toggle OFF → `tick()` no-ops and drag re-enables.
   order; confirm a movie in the queue **keeps its position**; toggle OFF and
   confirm a manual drag now persists. Verify the two SAB-behavior unknowns:
   reordering the **actively-downloading** item is not disruptive, and **priority
-  tiers** don't fight the `switch` positions.
+  tiers** don't fight the `switch` positions. Watch specifically for the queue
+  **never settling** — continuous `switch` calls tick after tick (visible in the
+  server log) — as a distinct failure mode from "wrong order"; it would mean SAB's
+  post-switch order disagrees with `episodeSortOrder` (e.g. priority tiers
+  reshuffling), which we'd address by excluding non-default-priority items.
 
 ## Risks / Open Questions
 
