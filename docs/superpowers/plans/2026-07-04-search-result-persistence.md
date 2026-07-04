@@ -221,7 +221,7 @@ with (read the snapshot once, seed each state from it):
 
 - [ ] **Step 3: Save the snapshot on change**
 
-Add a `useEffect` right after the state declarations (and after the `setRow` helper, anywhere inside the component before the return):
+Add a `useEffect` immediately after the `grab` state declaration and the `setRow` helper (around `SearchPage.tsx:127`, before `clickSort`):
 
 ```tsx
   // Persist the search for the session so navigating away and back restores it.
