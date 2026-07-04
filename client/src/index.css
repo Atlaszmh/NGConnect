@@ -1365,3 +1365,26 @@ code {
 .sort-toggle input {
   cursor: pointer;
 }
+
+/* --- Never let the page scroll sideways --- */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* --- Wide tables scroll within their own box, not the page --- */
+.search-results-table,
+.history-list,
+.episodes-panel {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .search-results-table .data-table,
+  .history-list .data-table,
+  .episodes-panel .episode-table {
+    min-width: 560px;
+  }
+}
