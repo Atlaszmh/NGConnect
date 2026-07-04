@@ -84,15 +84,14 @@ stacking). Desktop CSS is not touched.
     click;
   - close the drawer on nav-link click (`onClick` on the `NavLink`s sets
     `drawerOpen(false)`) so navigating dismisses it.
-  Keep the `NotificationBell` in `.sidebar-footer` for desktop; on mobile it also
-  appears in the top bar. To avoid rendering it twice in the DOM, the simplest
-  approach: render the bell once in the top bar and once in the footer, and let CSS
-  show the appropriate one per breakpoint. (Both instances are independent; the
-  bell manages its own state via its existing hooks — acceptable. If double-fetch
-  is a concern, the top-bar bell is the mobile one and the footer bell is hidden
-  under the breakpoint and vice-versa — only one is visible, but both mount.
-  Confirm during implementation this is acceptable; if not, lift to a single
-  instance rendered in a breakpoint-neutral spot.)
+  **NotificationBell placement (decided for v1):** render **two** `<NotificationBell/>`
+  instances — one in the new `.mobile-topbar`, one in the existing `.sidebar-footer` —
+  and let CSS show exactly one per breakpoint (footer visible ≥769px, top-bar
+  visible ≤768px). Both mount, so both run the bell's `setInterval(fetchCount,
+  10000)` + mount fetch + `document` mousedown listener; on a personal LAN dashboard
+  polling every 10s this 2× cost is negligible and is the chosen tradeoff for
+  simple JSX. (Fallback, only if this ever matters: a single instance gated by a
+  JS media-query hook — deliberately NOT done for v1.)
 - **CSS:**
   - `.mobile-topbar`: hidden on desktop (`display:none`), shown `flex` at ≤768px;
     fixed top, full width, height ~52px, holds hamburger/title/bell, `z-index`
@@ -109,15 +108,28 @@ stacking). Desktop CSS is not touched.
   - The old ≤768px sidebar-rail rules (`.sidebar { width:60px }`,
     `.sidebar-header h1 { font-size:0 }`, `.nav-link span { display:none }`,
     `.main-content { margin-left:60px }`) are replaced by the drawer rules.
+  - **Z-index ladder** (make it explicit so nothing guesses): content (base) <
+    `.mobile-topbar` < `.drawer-overlay` < `.sidebar.open` (nav drawer). The
+    existing `.notification-drawer` (`z-index:300`) opens from the top-bar bell and
+    should sit above the top bar but need not fight the nav drawer (the two aren't
+    open in a conflicting way). Assign concrete values in that order during
+    implementation.
+  - **Outside-click note (not a bug):** `NotificationBell` closes its own popover on
+    any `document` mousedown. When the nav `.drawer-overlay` is tapped, that
+    mousedown also closes an open notification popover — harmless and expected. Do
+    NOT add `stopPropagation` on the overlay (it would break the bell's
+    close-on-outside-click); just let both close.
 
 ## Component 2: CSS responsive sweep (all inside mobile media queries)
 
-- **Tables never break the page:** wrap the table containers (`.search-results-table`,
-  `.history-list`, and any `.episode-table` container) so they scroll horizontally
-  within their own box: `overflow-x: auto; -webkit-overflow-scrolling: touch`. Add a
-  global guard so the page body never scrolls sideways (e.g. `html, body {
-  max-width: 100%; overflow-x: hidden }` — verified not to clip the fixed
-  drawer/overlay, which are `position:fixed` and unaffected).
+- **Tables never break the page:** wrap the table containers so they scroll
+  horizontally within their own box (`overflow-x: auto; -webkit-overflow-scrolling:
+  touch`). There are **three** table containers to cover: `.search-results-table`
+  (`SearchPage.tsx`), `.history-list` (`DownloadsPage.tsx`), **and `.episodes-panel`**
+  (`index.css:585`, the `.episode-table` shown when a TV show is expanded on
+  `TvShowsPage.tsx`). Add a global guard so the page body never scrolls sideways
+  (e.g. `html, body { max-width: 100%; overflow-x: hidden }` — verified not to clip
+  the fixed drawer/overlay, which are `position:fixed` and unaffected).
 - **Flex rows stack/wrap** at ≤768px (or ≤480 where finer): `.search-bar`
   (`flex-wrap: wrap`, input full-width), `.page-header` (title above actions;
   `flex-wrap: wrap`), `.header-actions`/`.page-header-actions` (`flex-wrap: wrap`),
@@ -158,7 +170,10 @@ mobile widths, so a bad rule degrades gracefully to the desktop layout.
   drawer** — and confirm for each: no horizontal page scroll, text readable without
   zoom, all controls tappable (~44px), tables scroll within their own box, and the
   **hamburger drawer** opens/closes (hamburger, overlay tap, and nav-link tap) and
-  navigates correctly. Also confirm **desktop is unchanged** at ≥769px.
+  navigates correctly. Specific spots that are easy to miss: **expand a TV show** and
+  confirm the **episode table** scrolls in its own box (not the page); and check the
+  **Downloads Queue/History tab row** still sits flush on its underline after the
+  `.tab` tap-target bump. Also confirm **desktop is unchanged** at ≥769px.
 - Regression focus: desktop sidebar/lay­out at ≥769px (all new rules must be inside
   `max-width` queries), and that the notification drawer still works on desktop.
 
@@ -168,9 +183,9 @@ mobile widths, so a bad rule degrades gracefully to the desktop layout.
   a `max-width` media query (or is a strictly additive class like `.mobile-topbar`/
   `.drawer-overlay` hidden on desktop); build + desktop spot-check.
 - **Double-mounted `NotificationBell`** (top bar + footer, one hidden per
-  breakpoint). Both mount and run their polling hooks. Confirm during
-  implementation this is acceptable; if the double poll is undesirable, render a
-  single bell in a breakpoint-neutral location instead. (Flagged, not blocking.)
+  breakpoint). Both mount and run their 10s polling hooks + mousedown listener —
+  **decided acceptable for v1** (negligible on a personal LAN app; see Component 1).
+  Fallback documented if it ever matters.
 - **`overflow-x: hidden` on body** could in theory clip a legitimately-wide element;
   verified the only intentionally-wide elements (tables) get their own scroll
   container, and fixed-position drawer/overlay are exempt.
