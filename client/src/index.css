@@ -1297,3 +1297,16 @@ code {
   font-size: 0.8em;
   margin-top: 3px;
 }
+
+.sort-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  color: var(--text-muted, #9aa);
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.sort-toggle input {
+  cursor: pointer;
+}

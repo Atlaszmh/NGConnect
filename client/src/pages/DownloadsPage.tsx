@@ -83,9 +83,11 @@ function formatAge(dateStr: string): string {
 function SortableQueueItem({
   slot,
   onDelete,
+  disabled,
 }: {
   slot: QueueSlot;
   onDelete: (id: string) => void;
+  disabled: boolean;
 }) {
   const {
     attributes,
@@ -94,7 +96,7 @@ function SortableQueueItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: slot.nzo_id });
+  } = useSortable({ id: slot.nzo_id, disabled });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -106,14 +108,16 @@ function SortableQueueItem({
     <div ref={setNodeRef} style={style} className="download-item">
       <div className="download-header">
         <div className="download-title-row">
-          <button
-            className="btn-icon-sm drag-handle"
-            {...attributes}
-            {...listeners}
-            title="Drag to reorder"
-          >
-            <GripVertical size={14} />
-          </button>
+          {!disabled && (
+            <button
+              className="btn-icon-sm drag-handle"
+              {...attributes}
+              {...listeners}
+              title="Drag to reorder"
+            >
+              <GripVertical size={14} />
+            </button>
+          )}
           <span className="download-title">{slot.filename}</span>
         </div>
         <div className="download-actions">
@@ -149,6 +153,7 @@ export default function DownloadsPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'queue' | 'history'>('queue');
+  const [sortEnabled, setSortEnabled] = useState(true);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -174,12 +179,32 @@ export default function DownloadsPage() {
     }
   }, []);
 
+  const fetchSortConfig = useCallback(async () => {
+    try {
+      const res = await api.get('/system/queue-sort');
+      setSortEnabled(res.data?.enabled !== false);
+    } catch {
+      /* keep default ON */
+    }
+  }, []);
+
+  const toggleSort = async () => {
+    const next = !sortEnabled;
+    setSortEnabled(next); // optimistic
+    try {
+      await api.put('/system/queue-sort', { enabled: next });
+    } catch {
+      setSortEnabled(!next); // revert on failure
+    }
+  };
+
   useEffect(() => {
     fetchQueue();
     fetchHistory();
+    fetchSortConfig();
     const interval = setInterval(fetchQueue, 5000);
     return () => clearInterval(interval);
-  }, [fetchQueue, fetchHistory]);
+  }, [fetchQueue, fetchHistory, fetchSortConfig]);
 
   const togglePause = async () => {
     const mode = queue?.paused ? 'resume' : 'pause';
@@ -287,6 +312,10 @@ export default function DownloadsPage() {
         <p className="placeholder">Loading from SABnzbd...</p>
       ) : tab === 'queue' ? (
         <div className="download-list">
+          <label className="sort-toggle">
+            <input type="checkbox" checked={sortEnabled} onChange={toggleSort} />
+            Keep in episode order
+          </label>
           {!queue?.slots?.length ? (
             <p className="placeholder">Download queue is empty</p>
           ) : (
@@ -304,6 +333,7 @@ export default function DownloadsPage() {
                     key={slot.nzo_id}
                     slot={slot}
                     onDelete={deleteItem}
+                    disabled={sortEnabled}
                   />
                 ))}
               </SortableContext>
