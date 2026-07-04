@@ -1,3 +1,10 @@
+import fs from 'fs';
+import path from 'path';
+import { config } from '../config';
+import { createServiceLogger } from './logger';
+
+const log = createServiceLogger('queue-sort');
+
 export interface ParsedEpisode {
   show: string;   // normalized grouping key (lowercased, separators → spaces)
   season: number;
@@ -104,4 +111,105 @@ export function normalizeConfig(raw: unknown): QueueSortConfig {
     pollIntervalMs = Math.max(MIN_INTERVAL_MS, Math.floor(obj.pollIntervalMs));
   }
   return { enabled, pollIntervalMs };
+}
+
+// Persisted like logger's logs dir: __dirname-relative, created if missing.
+const DATA_DIR = path.join(__dirname, '../../data');
+const CONFIG_PATH = path.join(DATA_DIR, 'queue-sort.json');
+
+let queueSortConfig: QueueSortConfig = DEFAULT_CONFIG;
+
+function loadConfig(): QueueSortConfig {
+  try {
+    return normalizeConfig(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')));
+  } catch {
+    return normalizeConfig({}); // missing/corrupt → defaults (enabled ON)
+  }
+}
+
+function saveConfig(cfg: QueueSortConfig): void {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf-8');
+  } catch (err) {
+    log.warn('Failed to persist queue-sort config', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+export function getQueueSortConfig(): QueueSortConfig {
+  return { ...queueSortConfig };
+}
+
+export function updateQueueSortConfig(partial: unknown): QueueSortConfig {
+  const patch = partial && typeof partial === 'object' ? (partial as Record<string, unknown>) : {};
+  const merged = normalizeConfig({ ...queueSortConfig, ...patch });
+  const intervalChanged = merged.pollIntervalMs !== queueSortConfig.pollIntervalMs;
+  queueSortConfig = merged;
+  saveConfig(queueSortConfig);
+  if (pollInterval && intervalChanged) {
+    stopQueueSorter();
+    startQueueSorter();
+  }
+  return getQueueSortConfig();
+}
+
+let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+async function sabQueue(): Promise<QueueSlot[]> {
+  const url = new URL(`${config.sabnzbd.url}/api`);
+  url.searchParams.set('apikey', config.sabnzbd.apiKey);
+  url.searchParams.set('mode', 'queue');
+  url.searchParams.set('output', 'json');
+  const resp = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
+  const data = (await resp.json()) as { queue?: { slots?: QueueSlot[] } };
+  return data.queue?.slots ?? [];
+}
+
+async function sabSwitch(nzoId: string, position: number): Promise<void> {
+  const url = new URL(`${config.sabnzbd.url}/api`);
+  url.searchParams.set('apikey', config.sabnzbd.apiKey);
+  url.searchParams.set('mode', 'switch');
+  url.searchParams.set('value', nzoId);
+  url.searchParams.set('value2', String(position));
+  url.searchParams.set('output', 'json');
+  await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
+}
+
+async function tick(): Promise<void> {
+  if (!queueSortConfig.enabled) return;
+  try {
+    const slots = await sabQueue();
+    if (slots.length < 2) return;
+    const currentIds = slots.map((s) => s.nzo_id);
+    const moves = planMoves(currentIds, episodeSortOrder(slots));
+    if (moves.length === 0) return; // already sorted → no SAB calls
+    for (const mv of moves) {
+      await sabSwitch(mv.nzo_id, mv.position);
+    }
+    log.info(`Reordered queue into episode order (${moves.length} move(s))`);
+  } catch (err) {
+    log.warn('Queue sort tick failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+export function startQueueSorter(): void {
+  if (pollInterval) return;
+  queueSortConfig = loadConfig(); // pick up persisted enabled/interval on boot
+  log.info('Queue sorter started', {
+    enabled: queueSortConfig.enabled,
+    interval: queueSortConfig.pollIntervalMs,
+  });
+  tick();
+  pollInterval = setInterval(tick, queueSortConfig.pollIntervalMs);
+}
+
+export function stopQueueSorter(): void {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
 }
