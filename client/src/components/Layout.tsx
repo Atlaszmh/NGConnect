@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -7,6 +8,7 @@ import {
   Search,
   Shield,
   Settings,
+  Menu,
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import StatusBar from './StatusBar';
@@ -22,9 +24,26 @@ const navItems = [
 ];
 
 export default function Layout() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const closeDrawer = () => setDrawerOpen(false);
+
   return (
     <div className="app-layout">
-      <nav className="sidebar">
+      {/* Mobile top bar — hidden on desktop via CSS */}
+      <header className="mobile-topbar">
+        <button
+          className="topbar-hamburger btn-icon"
+          onClick={() => setDrawerOpen((o) => !o)}
+          aria-label="Open navigation"
+        >
+          <Menu size={20} />
+        </button>
+        <h1 className="topbar-title">NGConnect</h1>
+        <NotificationBell />
+      </header>
+
+      {/* Nav — fixed sidebar on desktop, off-canvas drawer on mobile */}
+      <nav className={`sidebar ${drawerOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <h1>NGConnect</h1>
         </div>
@@ -33,6 +52,7 @@ export default function Layout() {
             <li key={to}>
               <NavLink
                 to={to}
+                onClick={closeDrawer}
                 className={({ isActive }) =>
                   `nav-link ${isActive ? 'active' : ''}`
                 }
@@ -47,6 +67,10 @@ export default function Layout() {
           <NotificationBell />
         </div>
       </nav>
+
+      {/* Dimmed overlay behind the drawer — mobile only, only when open */}
+      {drawerOpen && <div className="drawer-overlay" onClick={closeDrawer} />}
+
       <main className="main-content">
         <StatusBar />
         <Outlet />
