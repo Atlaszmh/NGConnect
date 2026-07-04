@@ -84,3 +84,24 @@ export function planMoves(currentIds: string[], desiredIds: string[]): QueueMove
   }
   return moves;
 }
+
+export interface QueueSortConfig {
+  enabled: boolean;
+  pollIntervalMs: number;
+}
+
+const DEFAULT_CONFIG: QueueSortConfig = { enabled: true, pollIntervalMs: 15000 };
+const MIN_INTERVAL_MS = 5000;
+
+// Sanitize an unknown object (parsed from disk OR a PUT body) into a valid config:
+// enabled defaults true unless explicitly boolean false; pollIntervalMs defaults
+// to 15000 and is floored + clamped to MIN_INTERVAL_MS; unknown keys are dropped.
+export function normalizeConfig(raw: unknown): QueueSortConfig {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const enabled = typeof obj.enabled === 'boolean' ? obj.enabled : DEFAULT_CONFIG.enabled;
+  let pollIntervalMs = DEFAULT_CONFIG.pollIntervalMs;
+  if (typeof obj.pollIntervalMs === 'number' && Number.isFinite(obj.pollIntervalMs)) {
+    pollIntervalMs = Math.max(MIN_INTERVAL_MS, Math.floor(obj.pollIntervalMs));
+  }
+  return { enabled, pollIntervalMs };
+}

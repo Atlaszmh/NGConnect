@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseEpisode } from './queueSort';
 import { episodeSortOrder } from './queueSort';
 import { planMoves } from './queueSort';
+import { normalizeConfig } from './queueSort';
 
 const slot = (nzo_id: string, filename: string) => ({ nzo_id, filename });
 
@@ -103,5 +104,30 @@ describe('planMoves', () => {
       work.splice(mv.position, 0, mv.nzo_id);
     }
     expect(work).toEqual(desired);
+  });
+});
+
+describe('normalizeConfig', () => {
+  it('defaults an empty/absent object to enabled + 15000ms', () => {
+    expect(normalizeConfig({})).toEqual({ enabled: true, pollIntervalMs: 15000 });
+    expect(normalizeConfig(null)).toEqual({ enabled: true, pollIntervalMs: 15000 });
+    expect(normalizeConfig(undefined)).toEqual({ enabled: true, pollIntervalMs: 15000 });
+  });
+  it('honors an explicit enabled:false', () => {
+    expect(normalizeConfig({ enabled: false }).enabled).toBe(false);
+  });
+  it('ignores a non-boolean enabled (defaults to true)', () => {
+    expect(normalizeConfig({ enabled: 'yes' }).enabled).toBe(true);
+  });
+  it('clamps pollIntervalMs to the 5000ms floor and floors fractional values', () => {
+    expect(normalizeConfig({ pollIntervalMs: 1000 }).pollIntervalMs).toBe(5000);
+    expect(normalizeConfig({ pollIntervalMs: 20500.9 }).pollIntervalMs).toBe(20500);
+  });
+  it('falls back to default interval for a non-numeric value', () => {
+    expect(normalizeConfig({ pollIntervalMs: 'fast' }).pollIntervalMs).toBe(15000);
+  });
+  it('drops unknown keys and round-trips a realistic config', () => {
+    expect(normalizeConfig({ enabled: false, pollIntervalMs: 30000, foo: 1 }))
+      .toEqual({ enabled: false, pollIntervalMs: 30000 });
   });
 });
