@@ -14,6 +14,7 @@ import {
   DEPLOY_STATUS_PATH,
 } from '../services/deploy';
 import { normalizeArrHistory } from '../services/arrHistory';
+import { getQueueSortConfig, updateQueueSortConfig } from '../services/queueSort';
 
 export const systemRouter = Router();
 
@@ -115,6 +116,16 @@ systemRouter.get('/vpn/killswitch', (_req: Request, res: Response) => {
 systemRouter.put('/vpn/killswitch', (req: Request, res: Response) => {
   updateKillSwitchConfig(req.body);
   res.json(getKillSwitchConfig());
+});
+
+// Queue episode-order sort config (persisted). PUT body is sanitized inside
+// updateQueueSortConfig (normalizeConfig), so req.body can pass through directly.
+systemRouter.get('/queue-sort', (_req: Request, res: Response) => {
+  res.json(getQueueSortConfig());
+});
+
+systemRouter.put('/queue-sort', (req: Request, res: Response) => {
+  res.json(updateQueueSortConfig(req.body));
 });
 
 // System info for the settings/about page
