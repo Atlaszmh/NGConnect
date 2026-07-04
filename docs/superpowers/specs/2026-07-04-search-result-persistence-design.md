@@ -99,6 +99,14 @@ To avoid a circular import, the shared types (`NzbResult`, `SortKey`, `SortDir`,
 the helper from `SearchPage` if the planner prefers — the plan will pick the
 cleaner boundary; extracting the types is the tidier option).
 
+**Reciprocal edit (if extracting `searchTypes.ts`):** `SearchPage.tsx` must then
+**delete its in-file declarations** of `NzbResult`/`SortKey`/`SortDir`/`GrabState`
+(currently non-exported, at `SearchPage.tsx:5-19, 21-22, 116`) and **re-import
+them as `import type { … } from './searchTypes'`** (they're used only as types in
+`SearchPage`, so `verbatimModuleSyntax` requires the `type` modifier). The sort /
+format helpers stay in `SearchPage`; only the type declarations move. This avoids
+duplicate/colliding declarations.
+
 ## Component 2: `SearchPage.tsx` wiring
 
 - **On mount:** read `loadSearchSnapshot()` once (a `useState` lazy initializer or
@@ -110,6 +118,10 @@ cleaner boundary; extracting the types is the tidier option).
   keystroke of `query` is fine — sessionStorage writes are cheap and synchronous;
   if we want to be tidy the plan may debounce, but YAGNI for a local dashboard.)
 - `searching` stays purely local (never persisted).
+- **The mount write is benign:** the save `useEffect` fires once right after the
+  snapshot is loaded, re-writing identical data. That's an intentional no-op — do
+  NOT add a "skip first render" ref guard (needless complexity for a cheap
+  synchronous write).
 
 ## Data Flow
 
@@ -148,6 +160,11 @@ query/results/sort/grab. Grab a row → `grab` map updates → snapshot rewritte
   is a tidiness decision the plan will lock; both compile.
 - **Grab-outcome staleness:** a restored `grabbed` badge reflects the earlier
   session action, not a live re-check — acceptable and expected (Decision 2/3).
+- **Stale `grab` entries (pre-existing behavior, not introduced here):** today
+  `doSearch()` replaces `results` but does not clear `grab`, so old-search grab
+  entries already linger in-session; persistence merely makes that survive a
+  reload. Harmless (orphaned keys don't render against new rows). Out of scope to
+  "fix" — noted so a restored old badge isn't mistaken for a new bug.
 
 ## Files Touched
 
