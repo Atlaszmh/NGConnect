@@ -42,8 +42,11 @@ queue-sort endpoint pattern; orchestration logic in a small service module
 1. Read SAB's completed folder: call SAB API `mode=get_config&section=misc`,
    take `complete_dir`. This auto-detects the folder (user's manual sends may
    or may not have a category, so the whole completed tree is scanned; the
-   arr commands scan recursively).
-2. Fire both commands:
+   arr commands scan recursively). SAB can return a *relative* `complete_dir`
+   depending on configuration — validate with `path.isAbsolute` and return the
+   502 config error if not absolute.
+2. Fire both commands sequentially (Sonarr first, then Radarr — avoids the
+   theoretical race of both arrs Move-scanning the same tree concurrently):
    - Sonarr: `POST {sonarr}/api/v3/command` body
      `{ "name": "DownloadedEpisodesScan", "path": <complete_dir>, "importMode": "Move" }`
    - Radarr: `POST {radarr}/api/v3/command` body
@@ -54,7 +57,8 @@ queue-sort endpoint pattern; orchestration logic in a small service module
 
 Fetches `GET /api/v3/command/{id}` from each arr and returns
 `{ sonarr: { status }, radarr: { status } }` where status is the arr's command
-state (`queued` | `started` | `completed` | `failed` | ...). The client polls
+state. Terminal states are `completed`, `failed`, `aborted`, and `cancelled`
+(equivalently: anything other than `queued` / `started`). The client polls
 this every ~2 s until both are terminal.
 
 ### Error handling
@@ -80,8 +84,12 @@ this every ~2 s until both are terminal.
   commands report a terminal state (or a 60-poll safety cap is reached).
 - On completion: brief inline success note ("Import scan complete") and
   refresh the existing import-history list, which shows what was imported.
-- On failure: inline error message near the button, same visual pattern as the
-  page's existing error states.
+- If the 60-poll cap is hit before both commands are terminal: stop polling,
+  show a neutral note ("Scan still running in Sonarr/Radarr — history will
+  update when it finishes"), and refresh the history list once.
+- On failure: new inline message element near the button (the page has no
+  existing inline error state; reuse the `badge-danger` styling for the
+  message).
 
 ## Known limitation
 
