@@ -61,3 +61,26 @@ export function episodeSortOrder(slots: QueueSlot[]): string[] {
   sorted.forEach((ep, i) => { result[freeSlots[i]] = ep.nzo_id; });
   return result as string[];
 }
+
+export interface QueueMove {
+  nzo_id: string;
+  position: number;
+}
+
+// Minimal sequence of "move item to position i" ops that transforms current into
+// desired. Each op maps 1:1 to a SAB `mode=switch&value=<nzo_id>&value2=<position>`
+// call. Returns [] when current === desired (so the loop makes zero SAB calls).
+export function planMoves(currentIds: string[], desiredIds: string[]): QueueMove[] {
+  const work = [...currentIds];
+  const moves: QueueMove[] = [];
+  for (let i = 0; i < desiredIds.length; i++) {
+    const want = desiredIds[i];
+    if (work[i] === want) continue;
+    const j = work.indexOf(want, i);
+    if (j === -1) continue; // defensive: desired id not present in current
+    work.splice(j, 1);
+    work.splice(i, 0, want);
+    moves.push({ nzo_id: want, position: i });
+  }
+  return moves;
+}

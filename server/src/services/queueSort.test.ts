@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseEpisode } from './queueSort';
 import { episodeSortOrder } from './queueSort';
+import { planMoves } from './queueSort';
 
 const slot = (nzo_id: string, filename: string) => ({ nzo_id, filename });
 
@@ -78,5 +79,29 @@ describe('episodeSortOrder', () => {
   it('returns the same ids for an all-non-episode queue', () => {
     const slots = [slot('m1', 'Movie.One.2020.1080p'), slot('m2', 'Movie.Two.2021.1080p')];
     expect(episodeSortOrder(slots)).toEqual(['m1', 'm2']);
+  });
+});
+
+describe('planMoves', () => {
+  it('returns [] when current already equals desired (no SAB calls)', () => {
+    expect(planMoves(['a', 'b', 'c'], ['a', 'b', 'c'])).toEqual([]);
+  });
+
+  it('emits a single move when one item is out of place', () => {
+    expect(planMoves(['a', 'b', 'c'], ['b', 'a', 'c'])).toEqual([{ nzo_id: 'b', position: 0 }]);
+  });
+
+  it('produces a move sequence that reproduces desired when replayed', () => {
+    const current = ['a', 'b', 'c', 'd'];
+    const desired = ['d', 'c', 'b', 'a'];
+    const moves = planMoves(current, desired);
+    // Replay each move (splice item to position) and confirm we land on desired.
+    const work = [...current];
+    for (const mv of moves) {
+      const from = work.indexOf(mv.nzo_id);
+      work.splice(from, 1);
+      work.splice(mv.position, 0, mv.nzo_id);
+    }
+    expect(work).toEqual(desired);
   });
 });
