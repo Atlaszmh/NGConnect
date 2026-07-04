@@ -96,6 +96,14 @@ body {
   padding: 24px 32px;
 }
 
+/* Mobile-only nav elements — shown only under the mobile breakpoint (see @media below) */
+.mobile-topbar {
+  display: none;
+}
+.drawer-overlay {
+  display: none;
+}
+
 /* Pages */
 .page h2 {
   font-size: 1.5rem;
@@ -1265,27 +1273,74 @@ code {
 
 /* Responsive */
 @media (max-width: 768px) {
+  /* --- Mobile top bar --- */
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
+    padding: 0 12px;
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    z-index: 150;
+  }
+  .topbar-title {
+    flex: 1;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-accent);
+    letter-spacing: -0.5px;
+  }
+
+  /* --- Sidebar becomes an off-canvas drawer --- */
   .sidebar {
-    width: 60px;
+    width: min(80vw, 280px);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 250; /* above the overlay */
   }
-
-  .sidebar-header h1 {
-    font-size: 0;
+  .sidebar.open {
+    transform: translateX(0);
   }
-
-  .sidebar-header h1::first-letter {
-    font-size: 1.25rem;
-  }
-
   .nav-link span {
+    display: inline; /* labels visible in the drawer */
+  }
+
+  /* --- Dimmed overlay (between content and drawer) --- */
+  .drawer-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 200;
+  }
+
+  /* --- Content full-width, clear the fixed top bar --- */
+  .main-content {
+    margin-left: 0;
+    padding: 16px;
+    padding-top: 68px; /* 52px top bar + 16px breathing room */
+  }
+
+  /* Only the top-bar bell shows on mobile; hide the footer bell */
+  .sidebar-footer {
     display: none;
   }
 
-  .main-content {
-    margin-left: 60px;
-    padding: 16px;
+  /* Notification popover: anchored to the top-bar bell, open downward + capped */
+  .mobile-topbar .notification-drawer {
+    top: 100%;
+    bottom: auto;
+    left: auto;
+    right: 0;
+    width: min(320px, calc(100vw - 24px));
   }
 
+  /* Preserved from the old block */
   .card-grid {
     grid-template-columns: 1fr;
   }
