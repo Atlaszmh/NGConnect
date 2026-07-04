@@ -22,6 +22,8 @@ rest finish. The user wants a show's episodes to download in chronological
   they are** in the queue (no starvation of movies behind a TV backlog).
 - Expose an **on/off toggle** on the Downloads page (default ON), so the user can
   disable it to hand-arrange the queue by dragging.
+- **Persist the toggle across server restarts** (including auto-deploy service
+  restarts) to a small JSON file, so an OFF choice survives a restart.
 
 ## Non-Goals
 
@@ -31,9 +33,6 @@ rest finish. The user wants a show's episodes to download in chronological
 - Cross-referencing Sonarr/Radarr for episode metadata (we parse the SAB
   filename — see Approach). Daily-dated and absolute-numbered (anime) releases
   that lack `SxxEyy` are intentionally treated as non-episodes.
-- Persisting the toggle across server restarts (in-memory, default ON — mirrors
-  the existing VPN kill-switch config; a restart re-enables it, which is the
-  intended default).
 - Changing how grabs enter the queue, or the existing drag-to-reorder mechanism
   itself (only disabled in the UI while the toggle is ON).
 
@@ -72,9 +71,10 @@ treated as non-episodes and left in place.
 ## Architecture Overview
 
 A server-side background loop (mirroring `vpnMonitor`) keeps the SAB queue sorted;
-a small toggle config controls it; the Downloads page renders a switch. Three
-**pure functions** hold all the real logic and are unit-tested; the loop and the
-SAB HTTP calls are thin I/O around them.
+a small persisted toggle config controls it; the Downloads page renders a switch.
+Four **pure functions** hold all the real logic and are unit-tested
+(`parseEpisode`, `episodeSortOrder`, `planMoves`, `normalizeConfig`); the loop,
+the config file I/O, and the SAB HTTP calls are thin wrappers around them.
 
 ## Component 1: `server/src/services/queueSort.ts`
 
@@ -146,13 +146,28 @@ tradeoff, not a bug.
 - Returns `[]` when `current` already equals `desired` → **the loop issues zero
   SAB calls when nothing is out of place** (idempotent; no churn once sorted).
 
-### Loop + config (thin I/O, not unit-tested — live)
+### Config: persisted, with a pure `normalizeConfig` (unit-tested)
 
-- In-memory `queueSortConfig = { enabled: true, pollIntervalMs: 15000 }` with
-  `getQueueSortConfig()` and `updateQueueSortConfig(partial)` (restart the
-  interval if the interval changed) — the kill-switch shape. `updateQueueSortConfig`
-  **clamps `pollIntervalMs` to a floor** (e.g. `Math.max(5000, …)`) so a bad
-  `PUT` value can't make the loop hammer SAB.
+**`normalizeConfig(raw: unknown): QueueSortConfig`** — pure. Takes any object
+(parsed JSON from disk, or a `PUT` body) and returns a valid config: `enabled`
+defaults to `true` unless `raw.enabled === false`; `pollIntervalMs` defaults to
+`15000` and is **clamped to a floor** (`Math.max(5000, …)`); unknown/ill-typed
+fields are ignored. This one helper covers both the corrupt-file and bad-`PUT`
+cases, so nothing downstream has to re-validate.
+
+**Persistence.** Config lives at `server/data/queue-sort.json`, resolved
+`path.join(__dirname, '../../data/queue-sort.json')` — the same `__dirname`-relative
+convention `logger.ts` uses for `server/logs`. The dir is created if missing
+(`fs.mkdirSync(..., { recursive: true })`). `server/data/` is gitignored (runtime
+state, like `logs/`).
+- **Load on startup:** read + `JSON.parse` + `normalizeConfig`; on missing or
+  unreadable/corrupt file, fall back to `normalizeConfig({})` (all defaults).
+- **Save on update:** `updateQueueSortConfig(partial)` merges over current,
+  re-`normalizeConfig`s, writes the file (best-effort: log on write failure,
+  keep the new value in memory — don't crash), and restarts the interval if
+  `pollIntervalMs` changed.
+- `getQueueSortConfig()` returns a copy. Same accessor shape as the kill-switch,
+  plus the file I/O.
 - `startQueueSorter()/stopQueueSorter()` — `setInterval(tick, pollIntervalMs)`.
 - `tick()`: if `!enabled`, return. Fetch `mode=queue` from SAB (key server-side).
   Build `slots` (`nzo_id`, `filename`), compute `desired = episodeSortOrder(slots)`,
@@ -166,11 +181,12 @@ tradeoff, not a bug.
 Mirror the kill-switch endpoints:
 - `GET /system/queue-sort` → `getQueueSortConfig()`.
 - `PUT /system/queue-sort` → `updateQueueSortConfig(req.body)` then return the
-  config. Body: `{ enabled?: boolean; pollIntervalMs?: number }` (validate types;
-  ignore unknown keys). Note: this is **stricter than** the mirrored
-  `PUT /vpn/killswitch`, which passes `req.body` through unvalidated — validate
-  here rather than copy-pasting that handler. The floor-clamp lives in
-  `updateQueueSortConfig` (above), so the route need only type-check.
+  config. Body: `{ enabled?: boolean; pollIntervalMs?: number }`. The route can
+  pass `req.body` straight through because `normalizeConfig` (inside
+  `updateQueueSortConfig`) sanitizes types, ignores unknown keys, and floor-clamps
+  the interval — so a malformed body can't corrupt the persisted config or hammer
+  SAB. (The mirrored `PUT /vpn/killswitch` has no such sanitizer; this endpoint is
+  safer by construction.)
 
 ## Component 3: wiring — `server/src/index.ts`
 
@@ -205,6 +221,9 @@ poll shows the sorted queue. Toggle OFF → `tick()` no-ops and drag re-enables.
 | Paused queue | Still reordered (order applies when resumed). |
 | Multi-episode file (`S01E01E02`) | Sorted by the first episode. |
 | Unparseable / movie / season pack | Treated as non-episode; index held. |
+| Config file missing/corrupt on load | `normalizeConfig({})` → all defaults (enabled ON). |
+| Config file write fails on update | Log; keep the new value in memory; don't crash. |
+| Malformed `PUT` body | `normalizeConfig` ignores bad fields / clamps interval. |
 
 ## Testing Strategy
 
@@ -221,6 +240,10 @@ poll shows the sorted queue. Toggle OFF → `tick()` no-ops and drag re-enables.
 - **`planMoves` (pure):** equal arrays → `[]`; one item out of place → one move;
   fully reversed → correct sequence; a move sequence that reproduces `desired`
   when replayed.
+- **`normalizeConfig` (pure):** `{}` → defaults (`enabled:true`,
+  `pollIntervalMs:15000`); `{enabled:false}` honored; `pollIntervalMs` below the
+  floor clamped; string/garbage `pollIntervalMs` → default; unknown keys dropped;
+  a realistic on-disk object round-trips unchanged.
 - **Client:** `npm run build` (typecheck) is the gate (no client test harness).
 - **USER-RUN on the server PC** (SAB is localhost-only): with the toggle ON, get
   a show's episodes into the queue out of order (or drag them out of order) and
@@ -249,13 +272,16 @@ poll shows the sorted queue. Toggle OFF → `tick()` no-ops and drag re-enables.
 
 **New:**
 - `server/src/services/queueSort.ts` — `parseEpisode`, `episodeSortOrder`,
-  `planMoves`, config + loop.
-- `server/src/services/queueSort.test.ts` — unit tests for the three pure
+  `planMoves`, `normalizeConfig`, persisted config + loop.
+- `server/src/services/queueSort.test.ts` — unit tests for the four pure
   functions.
 - `docs/superpowers/specs/2026-07-03-queue-episode-sort-design.md` (this file).
+- `server/data/queue-sort.json` — runtime-generated persisted config (gitignored;
+  not committed).
 
 **Modified:**
 - `server/src/routes/system.ts` — `GET`/`PUT /system/queue-sort`.
 - `server/src/index.ts` — start the sorter loop.
 - `client/src/pages/DownloadsPage.tsx` — toggle UI + fetch/update; disable drag
   while enabled.
+- `.gitignore` — add `server/data/`.
