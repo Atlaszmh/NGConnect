@@ -77,7 +77,7 @@ history API) — more invasive, so only if the live check shows the block persis
 
 ## Context (current state)
 
-- **Client cancel** (`DownloadsPage.tsx:190-195`): `deleteItem(nzoId)` →
+- **Client cancel** (`DownloadsPage.tsx:215-220`): `deleteItem(nzoId)` →
   `api.get('/sabnzbd/api', { params: { mode:'queue', name:'delete', value:nzoId } })`
   then `fetchQueue()`. The queue rows come straight from SAB (`nzo_id`).
 - **Arrs are reachable server-side.** `config.sonarr` / `config.radarr` hold
@@ -119,10 +119,12 @@ export function findQueueMatch(
 
 **Thin I/O (not unit-tested — live):**
 - `arrQueueRecords(base): Promise<ArrQueueRecord[]>` — `GET {base.url}/api/v3/queue?page=1&pageSize=200`
-  with `X-Api-Key`; return `data.records ?? []`. (pageSize 200 comfortably covers
-  an active queue; on error return `[]` so one arr being down doesn't block cancel.)
+  with `X-Api-Key` and `AbortSignal.timeout(10000)` (mirrors `fetchArrHistory` in
+  `system.ts`); return `data.records ?? []`. On error OR timeout return `[]` so a
+  down **or hung** arr doesn't block cancel. (pageSize 200 comfortably covers an
+  active queue.)
 - `arrDeleteQueueItem(base, id)` — `DELETE {base.url}/api/v3/queue/{id}?removeFromClient=true&blocklist=true&skipRedownload=true`
-  with `X-Api-Key`.
+  with `X-Api-Key` and `AbortSignal.timeout(10000)`.
 - `sabDelete(nzoId)` — the existing SAB delete (`mode=queue&name=delete&value=<nzoId>&output=json`), key server-side.
 - `cancelDownload(nzoId): Promise<{ via: ArrTarget | 'sab'; blocklisted: boolean }>`:
   1. Fetch both arr queues in parallel; `findQueueMatch`.
