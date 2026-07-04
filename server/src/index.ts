@@ -13,6 +13,7 @@ import { nzbgeekRouter } from './routes/nzbgeek';
 import { healthRouter } from './routes/health';
 import { startVpnMonitor, onVpnEvent } from './services/vpnMonitor';
 import { startHealthMonitor } from './services/healthMonitor';
+import { startQueueSorter } from './services/queueSort';
 import { addNotification } from './services/notifications';
 import { notificationsRouter } from './routes/notifications';
 import { authRouter, requireAuth } from './middleware/auth';
@@ -68,6 +69,7 @@ app.listen(config.port, config.host, () => {
   logger.info(`NGConnect server running at http://${config.host}:${config.port}`);
   startVpnMonitor();
   startHealthMonitor();
+  startQueueSorter();
 
   // Wire VPN events to notifications
   onVpnEvent((_state, event) => {
