@@ -1388,3 +1388,60 @@ body {
     min-width: 560px;
   }
 }
+
+@media (max-width: 768px) {
+  /* Flex rows wrap/stack instead of overflowing */
+  .search-bar {
+    flex-wrap: wrap;
+  }
+  .search-bar .search-input,
+  .search-bar .search-input.large {
+    flex: 1 1 100%;
+  }
+  .page-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .header-actions,
+  .page-header-actions {
+    flex-wrap: wrap;
+  }
+  .stats-bar {
+    flex-wrap: wrap;
+    gap: 12px 20px;
+  }
+
+  /* Comfortable tap targets (~44px) */
+  .nav-link {
+    padding: 12px;
+    min-height: 44px;
+  }
+  .btn,
+  .btn-primary,
+  .btn-icon,
+  .tab {
+    min-height: 44px;
+  }
+  .btn-sm {
+    min-height: 36px;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    padding: 14px;
+    padding-top: 66px; /* 52px top bar + 14px */
+  }
+  .modal {
+    padding: 16px;
+  }
+  .page h2 {
+    font-size: 1.25rem;
+    margin-bottom: 16px;
+  }
+  /* Keep posters 2-up with the gap on the narrowest phones */
+  .movie-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+}
