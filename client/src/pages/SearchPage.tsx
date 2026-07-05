@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import api from '../services/api';
 import type { NzbResult, SortKey, SortDir, GrabState } from './searchTypes';
+import { loadSearchSnapshot, saveSearchSnapshot } from '../services/searchPersistence';
 
 const CATEGORIES: Record<string, string> = {
   '': 'All',
@@ -96,15 +97,25 @@ function interpretPush(status: number, data: unknown): { state: GrabState; msg?:
 }
 
 export default function SearchPage() {
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('');
-  const [results, setResults] = useState<NzbResult[]>([]);
+  const initial = useMemo(() => loadSearchSnapshot(), []);
+  const [query, setQuery] = useState(initial?.query ?? '');
+  const [category, setCategory] = useState(initial?.category ?? '');
+  const [results, setResults] = useState<NzbResult[]>(initial?.results ?? []);
   const [searching, setSearching] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [grab, setGrab] = useState<Record<string, { state: GrabState; msg?: string }>>({});
+  const [sortKey, setSortKey] = useState<SortKey | null>(initial?.sortKey ?? null);
+  const [sortDir, setSortDir] = useState<SortDir>(initial?.sortDir ?? 'desc');
+  const [grab, setGrab] = useState<Record<string, { state: GrabState; msg?: string }>>(
+    initial?.grab ?? {},
+  );
   const setRow = (rowId: string, v: { state: GrabState; msg?: string }) =>
     setGrab((p) => ({ ...p, [rowId]: v }));
+
+  // Persist the search for the session so navigating away and back restores it.
+  // Fires once on mount too (re-writing the just-loaded snapshot) — intentional
+  // and harmless; do not add a skip-first-render guard.
+  useEffect(() => {
+    saveSearchSnapshot({ query, category, results, sortKey, sortDir, grab });
+  }, [query, category, results, sortKey, sortDir, grab]);
 
   const clickSort = (key: SortKey) => {
     if (sortKey === key) {
