@@ -16,6 +16,7 @@ import {
 import { normalizeArrHistory } from '../services/arrHistory';
 import { getQueueSortConfig, updateQueueSortConfig } from '../services/queueSort';
 import { cancelDownload } from '../services/cancelDownload';
+import { startImportScan, getImportScanStatus } from '../services/importScan';
 
 export const systemRouter = Router();
 
@@ -185,6 +186,34 @@ systemRouter.post('/cancel-download', async (req: Request, res: Response) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Cancel failed';
     console.error('cancel-download error:', message);
+    res.status(502).json({ error: message });
+  }
+});
+
+// Manual import scan: make Sonarr+Radarr scan SAB's completed folder and
+// auto-import anything recognizable (for downloads sent to SAB manually).
+systemRouter.post('/import-scan', async (_req: Request, res: Response) => {
+  try {
+    res.json(await startImportScan());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Import scan failed';
+    console.error('import-scan error:', message);
+    res.status(502).json({ error: message });
+  }
+});
+
+systemRouter.get('/import-scan/:sonarrId/:radarrId', async (req: Request, res: Response) => {
+  const sonarrId = Number(req.params.sonarrId);
+  const radarrId = Number(req.params.radarrId);
+  if (!Number.isInteger(sonarrId) || !Number.isInteger(radarrId)) {
+    res.status(400).json({ error: 'command ids must be integers' });
+    return;
+  }
+  try {
+    res.json(await getImportScanStatus(sonarrId, radarrId));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Status check failed';
+    console.error('import-scan status error:', message);
     res.status(502).json({ error: message });
   }
 });
