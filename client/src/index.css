@@ -1382,10 +1382,68 @@ body {
 }
 
 @media (max-width: 768px) {
-  .search-results-table .data-table,
+  /* History + episode tables keep horizontal scroll (read-only, no per-row actions) */
   .history-list .data-table,
   .episodes-panel .episode-table {
     min-width: 560px;
+  }
+
+  /* Search results become stacked cards — no sideways scrolling, and the grab
+     buttons get full width so they're easy to tap. */
+  .search-results-table {
+    overflow-x: visible;
+  }
+  .search-results-table .data-table {
+    min-width: 0;
+  }
+  .search-results-table .data-table thead {
+    display: none;
+  }
+  .search-results-table .data-table,
+  .search-results-table .data-table tbody,
+  .search-results-table .data-table tr,
+  .search-results-table .data-table td {
+    display: block;
+    width: 100%;
+  }
+  .search-results-table .data-table tr {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .search-results-table .data-table td {
+    border: none;
+    padding: 3px 0;
+  }
+  /* labeled meta rows: "Category  Movies - HD" etc. */
+  .search-results-table .data-table td[data-label] {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .search-results-table .data-table td[data-label]::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  /* title: full width, no truncation, prominent */
+  .search-results-table .data-table td.name-cell {
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  /* action row: buttons wrap onto their own line, full tap size */
+  .search-results-table .data-table td.action-cell {
+    margin-top: 8px;
+  }
+  .search-results-table .grab-actions {
+    flex-wrap: wrap;
   }
 }
 

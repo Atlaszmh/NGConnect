@@ -246,11 +246,11 @@ export default function SearchPage() {
               {sorted.map((r) => (
                 <tr key={r.rowId}>
                   <td className="name-cell">{r.title}</td>
-                  <td>{categoryLabel(r)}</td>
-                  <td>{formatAge(r.pubDate)}</td>
-                  <td>{formatSize(r.sizeBytes)}</td>
-                  <td>{r.grabs != null ? r.grabs : '--'}</td>
-                  <td>
+                  <td data-label="Category">{categoryLabel(r)}</td>
+                  <td data-label="Age">{formatAge(r.pubDate)}</td>
+                  <td data-label="Size">{formatSize(r.sizeBytes)}</td>
+                  <td data-label="Grabs">{r.grabs != null ? r.grabs : '--'}</td>
+                  <td className="action-cell">
                     {(() => {
                       const g = grab[r.rowId]?.state ?? 'idle';
                       if (g === 'grabbed') return <span className="badge badge-success" title={grab[r.rowId]?.msg}>{grab[r.rowId]?.msg || 'Grabbed'}</span>;
