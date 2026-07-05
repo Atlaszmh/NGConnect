@@ -1415,6 +1415,7 @@ body {
   .search-results-table .data-table td {
     border: none;
     padding: 3px 0;
+    overflow-wrap: anywhere; /* break long dot-separated release titles */
   }
   /* labeled meta rows: "Category  Movies - HD" etc. */
   .search-results-table .data-table td[data-label] {
@@ -1444,6 +1445,30 @@ body {
   }
   .search-results-table .grab-actions {
     flex-wrap: wrap;
+  }
+}
+
+/* Mobile sort control — the table's clickable sort headers are hidden in card
+   mode, so surface sorting as a dropdown + direction toggle on mobile only. */
+.mobile-sort-bar {
+  display: none;
+}
+@media (max-width: 768px) {
+  .mobile-sort-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .mobile-sort-bar select {
+    flex: 1;
+    min-height: 40px;
+  }
+  .mobile-sort-bar .btn-sm {
+    min-height: 40px;
+    white-space: nowrap;
   }
 }
 

@@ -127,6 +127,13 @@ export default function SearchPage() {
     }
   };
 
+  // Mobile sort control (the clickable table headers are hidden in card mode).
+  // Picking a key applies the same default direction as clickSort.
+  const selectSort = (key: SortKey | null) => {
+    setSortKey(key);
+    if (key) setSortDir(key === 'title' || key === 'category' ? 'asc' : 'desc');
+  };
+
   const doSearch = async () => {
     if (!query.trim()) return;
     setSearching(true);
@@ -227,6 +234,29 @@ export default function SearchPage() {
       </div>
 
       {results.length > 0 && (
+        <>
+        <div className="mobile-sort-bar">
+          <span>Sort by</span>
+          <select
+            value={sortKey ?? ''}
+            onChange={(e) => selectSort((e.target.value || null) as SortKey | null)}
+          >
+            <option value="">Default</option>
+            <option value="title">Name</option>
+            <option value="category">Category</option>
+            <option value="pubDate">Age</option>
+            <option value="sizeBytes">Size</option>
+            <option value="grabs">Grabs</option>
+          </select>
+          <button
+            className="btn-sm"
+            onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+            disabled={!sortKey}
+            title="Toggle sort direction"
+          >
+            {sortDir === 'asc' ? '▲ Asc' : '▼ Desc'}
+          </button>
+        </div>
         <div className="search-results-table">
           <table className="data-table">
             <thead>
@@ -293,6 +323,7 @@ export default function SearchPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {!searching && results.length === 0 && query && (
