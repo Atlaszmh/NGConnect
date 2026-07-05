@@ -1,25 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import api from '../services/api';
-
-interface NzbResult {
-  guid: string;
-  rowId: string;
-  title: string;
-  link: string;
-  category: string;
-  categoryId: number | null;
-  sizeBytes: number;
-  pubDate: string;
-  grabs: number | null;
-  imdbId: string | null;
-  tvdbId: number | null;
-  season: number | null;
-  episode: number | null;
-}
-
-type SortKey = 'title' | 'category' | 'pubDate' | 'sizeBytes' | 'grabs';
-type SortDir = 'asc' | 'desc';
+import type { NzbResult, SortKey, SortDir, GrabState } from './searchTypes';
 
 const CATEGORIES: Record<string, string> = {
   '': 'All',
@@ -112,8 +94,6 @@ function interpretPush(status: number, data: unknown): { state: GrabState; msg?:
   }
   return { state: 'grabbed' };
 }
-
-type GrabState = 'idle' | 'sending' | 'grabbed' | 'rejected' | 'error';
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
