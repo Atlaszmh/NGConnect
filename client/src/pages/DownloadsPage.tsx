@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Pause, Play, Trash2, RefreshCw, AlertCircle, GripVertical } from 'lucide-react';
+import { Pause, Play, Trash2, RefreshCw, AlertCircle, GripVertical, FolderSearch } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -154,6 +154,9 @@ export default function DownloadsPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'queue' | 'history'>('queue');
   const [sortEnabled, setSortEnabled] = useState(true);
+  const [scanState, setScanState] = useState<
+    { phase: 'idle' } | { phase: 'scanning' } | { phase: 'done'; message: string } | { phase: 'error'; message: string }
+  >({ phase: 'idle' });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -195,6 +198,37 @@ export default function DownloadsPage() {
       await api.put('/system/queue-sort', { enabled: next });
     } catch {
       setSortEnabled(!next); // revert on failure
+    }
+  };
+
+  // Ask Sonarr+Radarr to scan SAB's completed folder and import what they
+  // recognize, then poll until both commands finish (or ~2 min cap).
+  const runImportScan = async () => {
+    setScanState({ phase: 'scanning' });
+    try {
+      const start = await api.post('/system/import-scan');
+      const { sonarrCommandId, radarrCommandId } = start.data;
+      const isTerminal = (s: string) => s !== 'queued' && s !== 'started';
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const res = await api.get(`/system/import-scan/${sonarrCommandId}/${radarrCommandId}`);
+        if (isTerminal(res.data?.sonarr?.status) && isTerminal(res.data?.radarr?.status)) {
+          setScanState({ phase: 'done', message: 'Import scan complete — see History' });
+          fetchHistory();
+          return;
+        }
+      }
+      // Poll cap hit: the scans keep running server-side; history catches up later.
+      setScanState({
+        phase: 'done',
+        message: 'Scan still running in Sonarr/Radarr — history will update when it finishes',
+      });
+      fetchHistory();
+    } catch (err) {
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Import scan failed';
+      setScanState({ phase: 'error', message });
     }
   };
 
@@ -247,6 +281,10 @@ export default function DownloadsPage() {
               {queue.paused ? 'Resume' : 'Pause'}
             </button>
           )}
+          <button onClick={runImportScan} disabled={scanState.phase === 'scanning'}>
+            <FolderSearch size={16} className={scanState.phase === 'scanning' ? 'spinning' : undefined} />
+            {scanState.phase === 'scanning' ? 'Scanning…' : 'Scan download folder'}
+          </button>
           <button
             className="btn-icon"
             onClick={() => {
@@ -259,6 +297,15 @@ export default function DownloadsPage() {
           </button>
         </div>
       </div>
+
+      {scanState.phase === 'done' && <p className="placeholder">{scanState.message}</p>}
+      {scanState.phase === 'error' && (
+        <p className="placeholder">
+          <span className="badge badge-danger">
+            <AlertCircle size={12} /> {scanState.message}
+          </span>
+        </p>
+      )}
 
       {/* Speed & Stats Bar */}
       {queue && (
