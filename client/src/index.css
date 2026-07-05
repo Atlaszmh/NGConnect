@@ -456,6 +456,7 @@ input:focus, select:focus {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0; /* let the title shrink/ellipsis instead of shoving actions off-screen */
 }
 
 .download-actions {
@@ -1382,48 +1383,58 @@ body {
 }
 
 @media (max-width: 768px) {
-  /* History + episode tables keep horizontal scroll (read-only, no per-row actions) */
-  .history-list .data-table,
+  /* Episode table keeps horizontal scroll (read-only, no per-row actions) */
   .episodes-panel .episode-table {
     min-width: 560px;
   }
 
-  /* Search results become stacked cards — no sideways scrolling, and the grab
-     buttons get full width so they're easy to tap. */
-  .search-results-table {
+  /* Search results AND download history become stacked cards — no sideways
+     scrolling, per-row labels surfaced, actions full width for easy tapping. */
+  .search-results-table,
+  .history-list {
     overflow-x: visible;
   }
-  .search-results-table .data-table {
+  .search-results-table .data-table,
+  .history-list .data-table {
     min-width: 0;
   }
-  .search-results-table .data-table thead {
+  .search-results-table .data-table thead,
+  .history-list .data-table thead {
     display: none;
   }
   .search-results-table .data-table,
   .search-results-table .data-table tbody,
   .search-results-table .data-table tr,
-  .search-results-table .data-table td {
+  .search-results-table .data-table td,
+  .history-list .data-table,
+  .history-list .data-table tbody,
+  .history-list .data-table tr,
+  .history-list .data-table td {
     display: block;
     width: 100%;
   }
-  .search-results-table .data-table tr {
+  .search-results-table .data-table tr,
+  .history-list .data-table tr {
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
     padding: 12px;
     margin-bottom: 10px;
   }
-  .search-results-table .data-table td {
+  .search-results-table .data-table td,
+  .history-list .data-table td {
     border: none;
     padding: 3px 0;
     overflow-wrap: anywhere; /* break long dot-separated release titles */
   }
   /* labeled meta rows: "Category  Movies - HD" etc. */
-  .search-results-table .data-table td[data-label] {
+  .search-results-table .data-table td[data-label],
+  .history-list .data-table td[data-label] {
     display: flex;
     justify-content: space-between;
     gap: 12px;
   }
-  .search-results-table .data-table td[data-label]::before {
+  .search-results-table .data-table td[data-label]::before,
+  .history-list .data-table td[data-label]::before {
     content: attr(data-label);
     color: var(--text-muted);
     font-size: 0.72rem;
@@ -1431,7 +1442,8 @@ body {
     letter-spacing: 0.5px;
   }
   /* title: full width, no truncation, prominent */
-  .search-results-table .data-table td.name-cell {
+  .search-results-table .data-table td.name-cell,
+  .history-list .data-table td.name-cell {
     max-width: none;
     white-space: normal;
     overflow: visible;
@@ -1445,6 +1457,31 @@ body {
   }
   .search-results-table .grab-actions {
     flex-wrap: wrap;
+  }
+
+  /* Download queue cards: show the full release name and keep the cancel
+     button reachable instead of letting a long title push it off-screen. */
+  .download-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .download-title-row {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .download-title {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+  .download-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+  .download-actions .btn-icon-sm {
+    min-width: 40px;
+    min-height: 40px;
   }
 }
 

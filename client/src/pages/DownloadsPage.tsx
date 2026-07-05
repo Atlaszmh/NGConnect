@@ -420,10 +420,10 @@ export default function DownloadsPage() {
                       {item.title}
                       {item.reason && <div className="history-fail-reason">{item.reason}</div>}
                     </td>
-                    <td>
+                    <td data-label="Type">
                       <span className="badge">{item.kind === 'tv' ? 'TV' : 'Movie'}</span>
                     </td>
-                    <td>
+                    <td data-label="Event">
                       {item.event === 'imported' ? (
                         <span className="badge badge-success">Imported</span>
                       ) : (
@@ -432,9 +432,9 @@ export default function DownloadsPage() {
                         </span>
                       )}
                     </td>
-                    <td>{item.quality || '--'}</td>
-                    <td>{formatSizeBytes(item.sizeBytes)}</td>
-                    <td>{formatAge(item.date)}</td>
+                    <td data-label="Quality">{item.quality || '--'}</td>
+                    <td data-label="Size">{formatSizeBytes(item.sizeBytes)}</td>
+                    <td data-label="Age">{formatAge(item.date)}</td>
                   </tr>
                 ))}
               </tbody>
