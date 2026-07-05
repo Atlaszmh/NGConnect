@@ -26,6 +26,11 @@ describe('extractCompleteDir', () => {
     expect(() => extractCompleteDir(null)).toThrow(/complete_dir/);
     expect(() => extractCompleteDir('nonsense')).toThrow(/complete_dir/);
   });
+
+  it('trims surrounding whitespace from complete_dir', () => {
+    const sab = { config: { misc: { complete_dir: 'R:\\Torrents\\complete  ' } } };
+    expect(extractCompleteDir(sab)).toBe('R:\\Torrents\\complete');
+  });
 });
 
 describe('commandStatus', () => {
