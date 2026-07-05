@@ -15,6 +15,7 @@ import {
 } from '../services/deploy';
 import { normalizeArrHistory } from '../services/arrHistory';
 import { getQueueSortConfig, updateQueueSortConfig } from '../services/queueSort';
+import { cancelDownload } from '../services/cancelDownload';
 
 export const systemRouter = Router();
 
@@ -167,5 +168,23 @@ systemRouter.post('/update/check', async (_req: Request, res: Response) => {
     res.status(409).json({ triggered: false, reason: 'updater-not-installed' });
   } else {
     res.status(500).json({ triggered: false, reason: 'error', detail: result.detail });
+  }
+});
+
+// Cancel a download: remove from SABnzbd, and if it's tracked by Sonarr/Radarr,
+// remove+blocklist there so a different release can be grabbed (see spec).
+systemRouter.post('/cancel-download', async (req: Request, res: Response) => {
+  const { nzoId } = req.body ?? {};
+  if (typeof nzoId !== 'string' || !nzoId) {
+    res.status(400).json({ error: 'nzoId (non-empty string) is required' });
+    return;
+  }
+  try {
+    const result = await cancelDownload(nzoId);
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Cancel failed';
+    console.error('cancel-download error:', message);
+    res.status(502).json({ error: message });
   }
 });

@@ -213,9 +213,7 @@ export default function DownloadsPage() {
   };
 
   const deleteItem = async (nzoId: string) => {
-    await api.get('/sabnzbd/api', {
-      params: { mode: 'queue', name: 'delete', value: nzoId },
-    });
+    await api.post('/system/cancel-download', { nzoId });
     fetchQueue();
   };
 
