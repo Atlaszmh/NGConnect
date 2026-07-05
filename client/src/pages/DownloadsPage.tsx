@@ -205,31 +205,43 @@ export default function DownloadsPage() {
   // recognize, then poll until both commands finish (or ~2 min cap).
   const runImportScan = async () => {
     setScanState({ phase: 'scanning' });
+    // Keep in sync with the server's isTerminal in server/src/services/importScan.ts.
+    const isTerminal = (s: string) => s !== 'queued' && s !== 'started';
+    let sonarrCommandId: number;
+    let radarrCommandId: number;
     try {
       const start = await api.post('/system/import-scan');
-      const { sonarrCommandId, radarrCommandId } = start.data;
-      const isTerminal = (s: string) => s !== 'queued' && s !== 'started';
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, 2000));
+      ({ sonarrCommandId, radarrCommandId } = start.data);
+    } catch (err) {
+      // Only a failure to START the scan is a hard error — the scan never ran.
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Import scan failed';
+      setScanState({ phase: 'error', message });
+      return;
+    }
+    // Poll for completion. A single dropped poll (transient network blip, or a
+    // briefly-slow arr) must NOT abort the UI while the scan is still running
+    // server-side, so poll errors are swallowed and the loop retries.
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
         const res = await api.get(`/system/import-scan/${sonarrCommandId}/${radarrCommandId}`);
         if (isTerminal(res.data?.sonarr?.status) && isTerminal(res.data?.radarr?.status)) {
           setScanState({ phase: 'done', message: 'Import scan complete — see History' });
           fetchHistory();
           return;
         }
+      } catch {
+        /* transient poll failure — keep polling until the cap */
       }
-      // Poll cap hit: the scans keep running server-side; history catches up later.
-      setScanState({
-        phase: 'done',
-        message: 'Scan still running in Sonarr/Radarr — history will update when it finishes',
-      });
-      fetchHistory();
-    } catch (err) {
-      const message =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        'Import scan failed';
-      setScanState({ phase: 'error', message });
     }
+    // Poll cap hit: the scans keep running server-side; history catches up later.
+    setScanState({
+      phase: 'done',
+      message: 'Scan still running in Sonarr/Radarr — history will update when it finishes',
+    });
+    fetchHistory();
   };
 
   useEffect(() => {
