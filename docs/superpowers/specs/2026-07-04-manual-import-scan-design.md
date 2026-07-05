@@ -100,8 +100,11 @@ a possible phase 2.
 
 ## Testing
 
-- Unit tests for the import-scan service with mocked SAB/arr HTTP responses
-  (same style as `server/src/services/deploy.test.ts`): happy path, SAB config
-  failure, one-arr-rejects, poll status mapping.
+- Unit tests for the import-scan service's pure functions (codebase
+  convention — see `cancelDownload.test.ts`, which tests only `findQueueMatch`
+  and leaves fetch orchestration to live verification): `complete_dir`
+  extraction/validation (missing, empty, relative, malformed), command status
+  mapping, terminal-state logic. The one-arr-rejects path is covered by live
+  verification, not unit tests.
 - Live verification must happen on the server PC — Sonarr/Radarr are
   localhost-only there.
