@@ -420,6 +420,26 @@ input:focus, select:focus {
   border: 1px solid var(--border-color);
 }
 
+/* Belt-and-suspenders: no descendant may force the Downloads views wider than
+   their container. Every flex link in the chain is allowed to shrink, and the
+   meta row wraps rather than overflowing on the narrowest phones. */
+.download-list,
+.download-item,
+.download-header,
+.download-title-row,
+.download-meta,
+.history-list {
+  min-width: 0;
+  max-width: 100%;
+}
+.download-meta {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.download-meta > span {
+  min-width: 0;
+}
+
 .download-header {
   display: flex;
   justify-content: space-between;
