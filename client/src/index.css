@@ -93,6 +93,9 @@ body {
 .main-content {
   margin-left: var(--sidebar-width);
   flex: 1;
+  min-width: 0; /* flex child must be allowed to shrink below content min-content,
+                   else a wide status bar / input forces the whole page past the
+                   viewport and the right edge gets clipped on mobile */
   padding: 24px 32px;
 }
 
