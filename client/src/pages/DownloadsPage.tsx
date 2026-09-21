@@ -249,7 +249,11 @@ export default function DownloadsPage() {
     fetchHistory();
     fetchSortConfig();
     const interval = setInterval(fetchQueue, 5000);
-    return () => clearInterval(interval);
+    const historyInterval = setInterval(fetchHistory, 30000);
+    return () => {
+      clearInterval(interval);
+      clearInterval(historyInterval);
+    };
   }, [fetchQueue, fetchHistory, fetchSortConfig]);
 
   const togglePause = async () => {

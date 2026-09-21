@@ -22,21 +22,32 @@ export const systemRouter = Router();
 
 // Fetch an arr's recent history; returns null on any error/timeout so one arr
 // being down doesn't blank the whole view.
+// eventType filter (int enum, identical in Sonarr v4 + Radarr v4+):
+// 3 = DownloadFolderImported, 4 = DownloadFailed. Filtering at the source
+// matters: without it the 50-record page is the 50 newest records of ANY type
+// (grabbed / fileDeleted / fileRenamed are one-per-episode), so a few season
+// packs or a rename sweep pushes every import out of the window before
+// normalizeArrHistory ever sees it.
 async function fetchArrHistory(
+  arr: 'radarr' | 'sonarr',
   base: { url: string; apiKey: string },
   includeParams: string
 ): Promise<unknown> {
   try {
     const url =
       `${base.url}/api/v3/history?page=1&pageSize=50&sortKey=date` +
-      `&sortDirection=descending&${includeParams}`;
+      `&sortDirection=descending&eventType=3&eventType=4&${includeParams}`;
     const resp = await fetch(url, {
       headers: { 'X-Api-Key': base.apiKey },
       signal: AbortSignal.timeout(10000),
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      console.warn(`${arr} history fetch failed: HTTP ${resp.status}`);
+      return null;
+    }
     return await resp.json();
-  } catch {
+  } catch (error) {
+    console.warn(`${arr} history fetch failed:`, error instanceof Error ? error.message : error);
     return null;
   }
 }
@@ -97,8 +108,8 @@ systemRouter.get('/status', async (_req: Request, res: Response) => {
 // Durable download history combined from Sonarr + Radarr (imported/failed).
 systemRouter.get('/history', async (_req: Request, res: Response) => {
   const [radarrRaw, sonarrRaw] = await Promise.all([
-    fetchArrHistory(config.radarr, 'includeMovie=true'),
-    fetchArrHistory(config.sonarr, 'includeSeries=true&includeEpisode=true'),
+    fetchArrHistory('radarr', config.radarr, 'includeMovie=true'),
+    fetchArrHistory('sonarr', config.sonarr, 'includeSeries=true&includeEpisode=true'),
   ]);
   const items = normalizeArrHistory(radarrRaw, sonarrRaw).slice(0, 50);
   res.json({ items });
