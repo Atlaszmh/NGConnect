@@ -695,6 +695,7 @@ input:focus, select:focus {
   background: linear-gradient(transparent, rgba(0,0,0,0.8));
   display: flex;
   justify-content: center;
+  gap: 6px;
   opacity: 0;
   transition: opacity 0.2s ease;
 }
