@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, RefreshCw, Plus, Download } from 'lucide-react';
+import { Search, RefreshCw, Plus, Download, Trash2 } from 'lucide-react';
 import api from '../services/api';
 
 interface Movie {
@@ -25,6 +25,7 @@ export default function MoviesPage() {
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [searching, setSearching] = useState<number | null>(null);
+  const [removing, setRemoving] = useState<number | null>(null);
 
   // Add movie states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -59,6 +60,20 @@ export default function MoviesPage() {
       // Search command sent
     }
     setTimeout(() => setSearching(null), 2000);
+  };
+
+  // Delete the movie AND its files from Radarr. No import exclusion is set, so
+  // adding it again later (Add button, or a Search grab) works exactly as today.
+  const removeMovie = async (m: Movie) => {
+    if (!window.confirm(`Remove "${m.title} (${m.year})" from Radarr and delete its files from disk?`)) return;
+    setRemoving(m.id);
+    try {
+      await api.delete(`/radarr/movie/${m.id}`, { params: { deleteFiles: 'true' } });
+      setMovies((prev) => prev.filter((x) => x.id !== m.id));
+    } catch (err) {
+      window.alert(`Remove failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+    }
+    setRemoving(null);
   };
 
   const searchForMovie = async () => {
@@ -176,6 +191,15 @@ export default function MoviesPage() {
                   >
                     <Download size={14} />
                     {searching === m.id ? 'Searching...' : 'Search'}
+                  </button>
+                  <button
+                    className="btn-sm"
+                    onClick={() => removeMovie(m)}
+                    disabled={removing === m.id}
+                    title="Remove from Radarr and delete files"
+                  >
+                    <Trash2 size={14} />
+                    {removing === m.id ? 'Removing...' : 'Remove'}
                   </button>
                 </div>
               </div>

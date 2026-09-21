@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, RefreshCw, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, RefreshCw, Plus, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import api from '../services/api';
 
 interface Series {
@@ -43,6 +43,7 @@ export default function TvShowsPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [searching, setSearching] = useState<number | null>(null);
+  const [removing, setRemoving] = useState<number | null>(null);
 
   // Add show states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -94,6 +95,21 @@ export default function TvShowsPage() {
       // Search command sent
     }
     setTimeout(() => setSearching(null), 2000);
+  };
+
+  // Delete the series AND all its files from Sonarr. No import-list exclusion is
+  // set, so adding it again later (Add button, or a Search grab) works exactly as today.
+  const removeSeries = async (s: Series) => {
+    if (!window.confirm(`Remove "${s.title} (${s.year})" from Sonarr and delete all its files from disk?`)) return;
+    setRemoving(s.id);
+    try {
+      await api.delete(`/sonarr/series/${s.id}`, { params: { deleteFiles: 'true' } });
+      setSeries((prev) => prev.filter((x) => x.id !== s.id));
+      if (expandedId === s.id) setExpandedId(null);
+    } catch (err) {
+      window.alert(`Remove failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+    }
+    setRemoving(null);
   };
 
   const searchForShow = async () => {
@@ -236,6 +252,18 @@ export default function TvShowsPage() {
                       disabled={searching === s.id}
                     >
                       {searching === s.id ? 'Searching...' : 'Search Missing'}
+                    </button>
+                    <button
+                      className="btn-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSeries(s);
+                      }}
+                      disabled={removing === s.id}
+                      title="Remove from Sonarr and delete files"
+                    >
+                      <Trash2 size={14} />
+                      {removing === s.id ? 'Removing...' : 'Remove'}
                     </button>
                     {expandedId === s.id ? (
                       <ChevronUp size={16} />
