@@ -103,7 +103,7 @@ All four services auto-start on Windows boot:
 - **TV root folder:** `R:\Torrents\ModernTorrents\TV Shows`
 - **Movie root folder:** `R:\Torrents\ModernTorrents\Movies`
 - **Plex Connect:** configured in Sonarr/Radarr for auto library refresh after download
-- **ffmpeg (full build) on the server PC** powers "Convert for Plex" on disc-image movies (`server/src/services/remuxJob.ts`): `winget install Gyan.FFmpeg`, then restart NGConnect. If NGConnect can't find it on PATH, set `FFMPEG_PATH` in `.env` to `ffmpeg.exe` (ffprobe must sit next to it). The essentials build lacks DVD/Blu-ray support.
+- **ffmpeg (full build) on the server PC** powers "Convert for Plex" on disc-image movies (`server/src/services/remuxJob.ts`): `winget install Gyan.FFmpeg`, then restart NGConnect. If NGConnect can't find it on PATH, set `FFMPEG_PATH` in `.env` to the full path of `ffmpeg.exe`, e.g. `C:\ffmpeg\bin\ffmpeg.exe` (ffprobe must sit next to it). The essentials build lacks DVD/Blu-ray support.
 
 ## Common Debugging
 
