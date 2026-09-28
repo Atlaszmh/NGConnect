@@ -77,8 +77,20 @@ export default function MoviesPage() {
     const t = setInterval(async () => {
       try {
         const res = await api.get('/system/remux');
-        setRemux(res.data);
-        if (res.data?.job?.stage === 'done') fetchMovies();
+        // job === null while one was running = the server restarted and lost it;
+        // say so instead of silently resetting the card.
+        setRemux((prev) =>
+          res.data?.job || !prev?.job
+            ? res.data
+            : {
+                ...res.data,
+                job: { ...prev.job, stage: 'failed', percent: null, message: 'Interrupted: the server restarted. Run it again.' },
+              },
+        );
+        if (res.data?.job?.stage === 'done') {
+          // Quiet refetch: fetchMovies() flips `loading`, which blanks the grid and loses the scroll position.
+          api.get('/radarr/movie').then((r) => { if (Array.isArray(r.data)) setMovies(r.data); }).catch(() => {});
+        }
       } catch {
         /* transient poll failure — keep polling */
       }
@@ -102,7 +114,7 @@ export default function MoviesPage() {
       const res = await api.get('/system/remux');
       setRemux(res.data);
     } catch {
-      setRemux(null);
+      setRemux({ ffmpeg: { ok: false, hint: 'Could not check the conversion status (reload to retry)' }, job: null });
     }
   };
 
@@ -328,7 +340,7 @@ export default function MoviesPage() {
                     )}
                   </div>
                   {myJob && (
-                    <div className={`movie-remux${myJob.stage === 'failed' ? ' failed' : ''}`}>
+                    <div className={`movie-remux${myJob.stage === 'failed' ? ' failed' : ''}`} role="status">
                       {remuxLabel(myJob)}
                       {myJob.message ? ` — ${myJob.message}` : ''}
                     </div>
