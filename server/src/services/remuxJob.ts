@@ -240,17 +240,22 @@ async function importIntoRadarr(movieId: number, mkv: string, release: string, d
       ],
     }),
   });
+  if (typeof cmd.id !== 'number') throw new Error('Radarr returned no command id for the import.');
   const deadline = Date.now() + IMPORT_TIMEOUT_MS;
   for (;;) {
     await new Promise((r) => setTimeout(r, 3000));
     let status: string | null = null;
+    let detail: string | null = null;
     try {
-      status = commandStatus(await radarr<unknown>(`/command/${cmd.id}`));
+      const cmdJson = await radarr<unknown>(`/command/${cmd.id}`);
+      status = commandStatus(cmdJson);
+      const message = (cmdJson as { message?: unknown })?.message;
+      detail = typeof message === 'string' ? message : null;
     } catch {
       /* one slow/failed poll must not fail the job while Radarr keeps importing */
     }
     if (status !== null && isTerminal(status)) {
-      if (status !== 'completed') throw new Error(`Radarr import ${status}.`);
+      if (status !== 'completed') throw new Error(`Radarr import ${status}${detail ? `: ${detail}` : ''}.`);
       return;
     }
     if (Date.now() > deadline) throw new Error('Radarr import still running after 60 min — check Radarr > Activity.');
@@ -260,12 +265,13 @@ async function importIntoRadarr(movieId: number, mkv: string, release: string, d
 async function runJob(current: RemuxJob, movie: Movie, file: MovieFile & { path: string }, stagingRoot: string) {
   const set = (patch: Partial<RemuxJob>) => Object.assign(current, patch);
   let partial: string | null = null; // deleted on failure; null once it is a verified MKV
+  let dir: string | null = null; // best-effort cleanup target; rmdir no-ops on a non-empty folder
   let verifiedMkv: string | null = null; // kept on failure; every later error says where it is
   try {
     const disc = await probeDisc(file.path);
     if (!disc) throw new Error('Not a readable DVD or Blu-ray image');
     const release = releaseName(movie.title, movie.year, disc.kind, disc.height);
-    const dir = path.join(stagingRoot, release);
+    dir = path.join(stagingRoot, release);
     await fs.promises.mkdir(dir, { recursive: true });
     const mkv = path.join(dir, `${release}.mkv`);
     partial = `${mkv}.partial`;
@@ -294,9 +300,11 @@ async function runJob(current: RemuxJob, movie: Movie, file: MovieFile & { path:
     await fs.promises.rmdir(dir).catch(() => {});
     await fs.promises.rmdir(stagingRoot).catch(() => {});
     set({ stage: 'done', percent: 100, message: `Imported as ${imported}`, finishedAt: new Date().toISOString() });
-    log.info(`Converted ${movie.title} (${movie.year}) → ${imported}`);
+    log.info(`Converted ${movie.title} (${movie.year}): replaced ${file.relativePath} with ${imported}`);
   } catch (err) {
     if (partial) await fs.promises.rm(partial, { force: true }).catch(() => {});
+    if (dir) await fs.promises.rmdir(dir).catch(() => {});
+    await fs.promises.rmdir(stagingRoot).catch(() => {});
     let message = err instanceof Error ? err.message : String(err);
     if (verifiedMkv) message += ` The MKV is at ${verifiedMkv}`;
     set({ stage: 'failed', percent: null, message, finishedAt: new Date().toISOString() });

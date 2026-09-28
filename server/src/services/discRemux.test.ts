@@ -73,6 +73,16 @@ describe('findDvdMainTitle', () => {
     expect(await findDvdMainTitle(probe)).toBeNull();
     expect(probe).toHaveBeenCalledTimes(99);
   });
+
+  it('rejects when two titles are within 1 s of the longest (copy protection)', async () => {
+    const results = [ok(6180), ok(6180.4), fail('Title 3 not found')];
+    await expect(findDvdMainTitle(async (n) => results[n - 1])).rejects.toThrow(/copy protection/);
+  });
+
+  it('accepts a near-duplicate more than 1 s shorter than the longest', async () => {
+    const results = [ok(6180), ok(6178), fail('Title 3 not found')];
+    expect(await findDvdMainTitle(async (n) => results[n - 1])).toEqual({ title: 1, seconds: 6180 });
+  });
 });
 
 describe('parseBlurayDuration', () => {
@@ -91,6 +101,14 @@ describe('parseBlurayDuration', () => {
   it('returns null when nothing was selected (no usable playlists)', () => {
     expect(parseBlurayDuration('[bluray @ 0] 0 usable playlists:\n')).toBeNull();
     expect(parseBlurayDuration('selected 00800.mpls\n')).toBeNull();
+  });
+  it('throws when another playlist shares the selected one\'s exact length (copy protection)', () => {
+    const log = 'playlist 00800.mpls (2:35:12)\nplaylist 00801.mpls (2:35:12)\nselected 00800.mpls\n';
+    expect(() => parseBlurayDuration(log)).toThrow(/copy protection/);
+  });
+  it('does not double-count the same playlist logged twice', () => {
+    const log = 'playlist 00800.mpls (2:35:12)\nplaylist 00800.mpls (2:35:12)\nselected 00800.mpls\n';
+    expect(parseBlurayDuration(log)).toBe(9312);
   });
 });
 

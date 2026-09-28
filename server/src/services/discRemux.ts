@@ -17,36 +17,62 @@ export function classifyDvdProbeFailure(stderr: string): 'not-dvd' | 'past-end' 
 
 export type TitleProbe = { ok: true; seconds: number } | { ok: false; stderr: string };
 
+// Thrown by findDvdMainTitle/parseBlurayDuration when the main feature can't be
+// picked safely: copy-protected discs pad the disc with several titles/playlists
+// of (near-)identical length in scrambled order, so "pick the longest" would
+// silently grab the wrong one.
+export const AMBIGUOUS_FEATURE =
+  "Several titles on the disc match the feature's length (typical of copy protection), so the right one " +
+  "can't be picked safely. The disc image was not touched; use MakeMKV for this one.";
+
 // The longest DVD title is the main feature. Stops at the first title past the
 // end; a title that fails for any other reason (bad headers, probe timeout) is
 // skipped. Returns null for a non-DVD image or when no title opens.
-// ponytail: copy-protected discs with many same-length decoy titles can still
-// fool "longest"; verifyRemux's runtime check only catches wrong-length picks.
+// ponytail: same-length decoys within 1 s of the longest are now refused
+// (AMBIGUOUS_FEATURE) rather than silently guessed; a decoy more than 1 s off
+// is still picked with no way to know it's wrong — verifyRemux's runtime check
+// is the last backstop for that case.
 export async function findDvdMainTitle(
   probe: (title: number) => Promise<TitleProbe>,
 ): Promise<{ title: number; seconds: number } | null> {
+  const found: { title: number; seconds: number }[] = [];
   let best: { title: number; seconds: number } | null = null;
   for (let title = 1; title <= 99; title++) {
     const result = await probe(title);
     if (result.ok) {
+      found.push({ title, seconds: result.seconds });
       if (!best || result.seconds > best.seconds) best = { title, seconds: result.seconds };
       continue;
     }
     const failure = classifyDvdProbeFailure(result.stderr);
-    if (failure === 'not-dvd') return best;
-    if (failure === 'past-end') break;
+    if (failure === 'not-dvd' || failure === 'past-end') break;
   }
-  return best;
+  if (!best) return null;
+  const main = best;
+  if (found.some((t) => t.title !== main.title && Math.abs(t.seconds - main.seconds) < 1)) {
+    throw new Error(AMBIGUOUS_FEATURE);
+  }
+  return main;
 }
 
 // libbluray (through ffmpeg's bluray: protocol) logs "playlist 00800.mpls (2:35:12)"
 // for each usable playlist, then "selected 00800.mpls" — the longest, which
-// ffmpeg picks itself when no -playlist is given (libavformat/bluray.c).
+// ffmpeg picks itself when no -playlist is given (libavformat/bluray.c). A Map
+// keyed by playlist number de-dupes a playlist logged more than once, so it's
+// never mistaken for a second, distinct playlist of the same length.
 export function parseBlurayDuration(log: string): number | null {
+  const playlists = new Map<string, number>();
+  const re = /playlist (\d+)\.mpls \((\d+):(\d\d):(\d\d)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(log))) {
+    playlists.set(m[1], Number(m[2]) * 3600 + Number(m[3]) * 60 + Number(m[4]));
+  }
   const selected = /selected (\d+)\.mpls/.exec(log)?.[1];
-  if (!selected) return null;
-  const m = new RegExp(`playlist ${selected}\\.mpls \\((\\d+):(\\d\\d):(\\d\\d)\\)`).exec(log);
-  return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null;
+  const seconds = selected ? playlists.get(selected) : undefined;
+  if (seconds === undefined) return null;
+  const matching = [...playlists.values()].filter((s) => s === seconds).length;
+  if (matching > 1) throw new Error(AMBIGUOUS_FEATURE);
+  return seconds;
 }
 
 export type RemuxQuality = 'DVD' | 'Remux-1080p' | 'Remux-2160p';
