@@ -84,11 +84,17 @@ export default function MoviesPage() {
             ? res.data
             : {
                 ...res.data,
-                job: { ...prev.job, stage: 'failed', percent: null, message: 'Interrupted: the server restarted. Run it again.' },
+                job: {
+                  ...prev.job,
+                  stage: 'failed',
+                  percent: null,
+                  message: 'Interrupted: the server restarted. If the Disc image badge is still shown, run it again.',
+                },
               },
         );
-        if (res.data?.job?.stage === 'done') {
+        if (res.data?.job?.stage === 'done' || !res.data?.job) {
           // Quiet refetch: fetchMovies() flips `loading`, which blanks the grid and loses the scroll position.
+          // Covers both a normal finish and a restart during 'importing' — Radarr may have completed the swap anyway.
           api.get('/radarr/movie').then((r) => { if (Array.isArray(r.data)) setMovies(r.data); }).catch(() => {});
         }
       } catch {
