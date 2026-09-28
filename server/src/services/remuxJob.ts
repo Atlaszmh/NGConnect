@@ -6,6 +6,7 @@ import { config } from '../config';
 import { commandStatus, fetchSabCompleteDir, isTerminal } from './importScan';
 import { createServiceLogger } from './logger';
 import {
+  blurayFailureDetail,
   findDvdMainTitle,
   isDiscImage,
   parseBlurayDuration,
@@ -151,8 +152,9 @@ async function probeDvdTitle(iso: string, title: number): Promise<TitleProbe> {
 }
 
 // DVD first (cheap per-title probes); anything that isn't a DVD is tried as a
-// Blu-ray. null = neither opened.
-export async function probeDisc(iso: string): Promise<DiscProbe | null> {
+// Blu-ray. Throws (instead of returning null) when neither opens, with detail
+// from the Blu-ray attempt's stderr so an encrypted/broken disc explains itself.
+export async function probeDisc(iso: string): Promise<DiscProbe> {
   const dvd = await findDvdMainTitle((n) => probeDvdTitle(iso, n));
   if (dvd) return { kind: 'dvd', title: dvd.title, sourceSeconds: dvd.seconds, height: null };
   const r = await run(
@@ -161,7 +163,10 @@ export async function probeDisc(iso: string): Promise<DiscProbe | null> {
     120000,
   );
   const seconds = r.code === 0 ? parseBlurayDuration(r.stderr) : null;
-  if (!seconds) return null;
+  if (!seconds) {
+    const detail = blurayFailureDetail(r.stderr);
+    throw new Error(`Not a readable DVD or Blu-ray image${detail ? ` (${detail})` : ''}`);
+  }
   return { kind: 'bluray', title: null, sourceSeconds: seconds, height: summarizeProbe(safeJson(r.stdout)).height };
 }
 
@@ -174,6 +179,7 @@ export function runRemux(args: string[], sourceSeconds: number, onPercent: (perc
     let lastOutUs = -1;
     let lastAdvance = Date.now();
     let stalled = false;
+    let runaway = false;
     const watchdog = setInterval(() => {
       if (Date.now() - lastAdvance > STALL_MS) {
         stalled = true;
@@ -186,6 +192,10 @@ export function runRemux(args: string[], sourceSeconds: number, onPercent: (perc
       if (us > lastOutUs) {
         lastOutUs = us;
         lastAdvance = Date.now();
+      }
+      if (sourceSeconds > 0 && us > sourceSeconds * 1.5e6) {
+        runaway = true;
+        child.kill();
       }
       onPercent(progressPercent(us, sourceSeconds));
     });
@@ -201,6 +211,7 @@ export function runRemux(args: string[], sourceSeconds: number, onPercent: (perc
       clearInterval(watchdog);
       if (code === 0) resolve();
       else if (stalled) reject(new Error('ffmpeg stopped making progress for 5 minutes'));
+      else if (runaway) reject(new Error('ffmpeg read far past the feature length (looping title?), so it was stopped'));
       else reject(new Error(`ffmpeg failed (exit ${code})${lastStderr ? `: ${lastStderr}` : ''}`));
     });
   });
@@ -269,7 +280,6 @@ async function runJob(current: RemuxJob, movie: Movie, file: MovieFile & { path:
   let verifiedMkv: string | null = null; // kept on failure; every later error says where it is
   try {
     const disc = await probeDisc(file.path);
-    if (!disc) throw new Error('Not a readable DVD or Blu-ray image');
     const release = releaseName(movie.title, movie.year, disc.kind, disc.height);
     dir = path.join(stagingRoot, release);
     await fs.promises.mkdir(dir, { recursive: true });
@@ -306,7 +316,7 @@ async function runJob(current: RemuxJob, movie: Movie, file: MovieFile & { path:
     if (dir) await fs.promises.rmdir(dir).catch(() => {});
     await fs.promises.rmdir(stagingRoot).catch(() => {});
     let message = err instanceof Error ? err.message : String(err);
-    if (verifiedMkv) message += ` The MKV is at ${verifiedMkv}`;
+    if (verifiedMkv) message += `${/[.!?]$/.test(message) ? '' : '.'} The MKV is at ${verifiedMkv}`;
     set({ stage: 'failed', percent: null, message, finishedAt: new Date().toISOString() });
     log.error(`Conversion of ${movie.title} (${movie.year}) failed: ${message}`);
   }

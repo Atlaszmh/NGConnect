@@ -75,6 +75,22 @@ export function parseBlurayDuration(log: string): number | null {
   return seconds;
 }
 
+// Explains a failed Blu-ray probe/read. libbluray (through ffmpeg's bluray:
+// protocol) tags its real error on a "[bluray @ ...]" line (e.g. AACS/BD+
+// encryption); the line ffmpeg actually exits on is usually a generic
+// "...: I/O error" that names the failure but not the cause.
+export function blurayFailureDetail(stderr: string): string | null {
+  const lines = stderr.split(/\r?\n/);
+  let lastTagged: string | null = null;
+  for (const line of lines) {
+    const m = /\[bluray @ [^\]]*\]\s*(.+)/.exec(line);
+    if (m) lastTagged = m[1].trim();
+  }
+  if (lastTagged) return lastTagged;
+  const nonEmpty = lines.map((l) => l.trim()).filter(Boolean);
+  return nonEmpty.length ? nonEmpty[nonEmpty.length - 1] : null;
+}
+
 export type RemuxQuality = 'DVD' | 'Remux-1080p' | 'Remux-2160p';
 
 export function remuxQualityName(kind: DiscKind, height: number | null): RemuxQuality {
@@ -83,9 +99,10 @@ export function remuxQualityName(kind: DiscKind, height: number | null): RemuxQu
 }
 
 // Staging folder/file name. It parses (Radarr's QualityParser) to the same
-// quality ManualImport is told explicitly, so a manual "Scan download folder"
-// recovery would label the file the same way. No "-GROUP" suffix on purpose:
-// "DVD-R..." would parse as the DVD-R disc quality.
+// quality ManualImport is told explicitly, so a manual recovery through
+// Radarr's Wanted > Manual Import on the staged folder (e.g. after a crash)
+// labels the file the same way. No "-GROUP" suffix on purpose: "DVD-R..."
+// would parse as the DVD-R disc quality.
 export function releaseName(title: string, year: number, kind: DiscKind, height: number | null): string {
   const safe = title
     .replace(/[<>:"/\\|?*]/g, '')

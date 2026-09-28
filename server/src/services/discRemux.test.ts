@@ -4,6 +4,7 @@ import {
   classifyDvdProbeFailure,
   findDvdMainTitle,
   parseBlurayDuration,
+  blurayFailureDetail,
   remuxQualityName,
   releaseName,
   remuxArgs,
@@ -109,6 +110,26 @@ describe('parseBlurayDuration', () => {
   it('does not double-count the same playlist logged twice', () => {
     const log = 'playlist 00800.mpls (2:35:12)\nplaylist 00800.mpls (2:35:12)\nselected 00800.mpls\n';
     expect(parseBlurayDuration(log)).toBe(9312);
+  });
+});
+
+describe('blurayFailureDetail', () => {
+  it('returns the last [bluray @ ...]-tagged line, trimmed', () => {
+    const stderr = '[bluray @ 000001fcf4d0c300] bd_open() failed\nbluray:C:\\x.iso: I/O error\n';
+    expect(blurayFailureDetail(stderr)).toBe('bd_open() failed');
+  });
+  it('explains an AACS-encrypted disc', () => {
+    const stderr =
+      '[bluray @ 000001fc4d8b2a00] Media stream encrypted with AACS, libaacs not found\n' +
+      'bluray:C:\\x.iso: I/O error\n';
+    expect(blurayFailureDetail(stderr)).toBe('Media stream encrypted with AACS, libaacs not found');
+  });
+  it('falls back to the last non-empty line when nothing is [bluray @ ...]-tagged', () => {
+    const stderr = 'Some unrelated ffmpeg startup line\nAnother line with no bracket tag\n';
+    expect(blurayFailureDetail(stderr)).toBe('Another line with no bracket tag');
+  });
+  it('returns null for empty stderr', () => {
+    expect(blurayFailureDetail('')).toBeNull();
   });
 });
 
