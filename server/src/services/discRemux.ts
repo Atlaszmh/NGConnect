@@ -74,6 +74,8 @@ export function releaseName(title: string, year: number, kind: DiscKind, height:
 
 // ffmpeg arguments for a stream-copy remux. -nostdin/-y: never block on a
 // prompt (a .partial left by an interrupted run is simply overwritten).
+// ponytail: the bluray: protocol feeds a bare MPEG-TS, so Blu-ray remuxes carry
+// no chapters or track language tags (DVD remuxes keep both); MakeMKV if needed.
 export function remuxArgs(kind: DiscKind, iso: string, title: number | null, out: string): string[] {
   const input =
     kind === 'dvd' ? ['-f', 'dvdvideo', '-title', String(title ?? 1), '-i', iso] : ['-i', `bluray:${iso}`];

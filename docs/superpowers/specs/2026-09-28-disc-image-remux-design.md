@@ -138,7 +138,8 @@ quality choice.
 
 - `GET /api/system/remux` → `{ ffmpeg: { ok, dvd, bluray, hint }, job }`
 - `POST /api/system/remux` `{ movieId }` → `202 { job }`; `409` if a job is
-  running; `400` bad id or the movie's file is not a disc image; `503` if
+  running; `400` malformed id or the movie's file is not a disc image (an id
+  Radarr doesn't know surfaces as `502`, like other Radarr errors); `503` if
   ffmpeg is not ok (step 2); `507` if free space is short.
 
 ### Client — Movies page
