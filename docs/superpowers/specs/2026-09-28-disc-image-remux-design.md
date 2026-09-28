@@ -82,7 +82,8 @@ job as `done` or `failed` and releases the lock:
      lines and `selected NNNNN.mpls`; the selected playlist's duration is
      `sourceSeconds`. stdout JSON gives the video `height`. (ffmpeg ignores
      playlists under 3 min — `MIN_PLAYLIST_LENGTH` — irrelevant for features.)
-   - Neither opens → `failed` ("not a readable DVD or Blu-ray image").
+   - Neither opens → `failed` ("Not a readable DVD or Blu-ray image (<libbluray's
+     reason>)", e.g. AACS encryption — the `[bluray @ …]` line from stderr).
    - Ambiguous feature → `failed`, disc image untouched ("use MakeMKV"): another
      DVD title within 1 s of the longest, or another Blu-ray playlist with
      exactly the selected playlist's length. Copy-protected discs ship such
@@ -92,7 +93,9 @@ job as `done` or `failed` and releases the lock:
    1080). `<Title>` is Radarr's title with characters invalid in Windows file
    names removed and spaces → dots (e.g. `Puss.in.Boots.The.Last.Wish.2022.DVD`).
    These names parse to the same quality Radarr is told explicitly in step 8,
-   so a manual "Scan download folder" recovery labels the file correctly.
+   so a manual recovery through Radarr's Wanted > Manual Import on the staged
+   folder labels the file correctly. (The dashboard's "Scan download folder"
+   would not match it: the file sits under `ngconnect-remux\`.)
    Staging path: `<complete_dir>\ngconnect-remux\<release>\<release>.mkv`.
 6. **Remux** (`remuxing`) with ffmpeg stream copy into `<staging>.partial`
    (`-f matroska`; the `.partial` extension keeps the dashboard's "Scan download
@@ -104,9 +107,10 @@ job as `done` or `failed` and releases the lock:
      `.partial` left by an interrupted run; `-nostdin` + stdin `ignore` so
      ffmpeg can never block on a prompt)
    Percent = `out_time_us` / `sourceSeconds`, capped at 99 until ffmpeg exits.
-   Spawn error, non-zero exit, or a watchdog trip (no `out_time_us` advance for
-   5 min → kill) → delete the partial, `failed` (last stderr line as the
-   message).
+   Spawn error, non-zero exit, a stall (no `out_time_us` advance for 5 min →
+   kill) or a runaway read (`out_time_us` past 1.5× `sourceSeconds` → kill, so a
+   looping title can't fill the drive) → delete the partial, `failed` (last
+   stderr line as the message).
 7. **Verify** (`verifying`): ffprobe the partial. Pass only if it has a video and
    an audio stream AND its duration is ≥ 97% of `sourceSeconds` (catches
    truncated reads of a damaged image) AND within 80%–130% of Radarr's runtime
