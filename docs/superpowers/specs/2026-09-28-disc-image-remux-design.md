@@ -63,10 +63,11 @@ job as `done` or `failed` and releases the lock:
 
 1. **Load** the movie from Radarr; require a movie file ending `.iso`/`.img`.
    Remember `movieFile.id` and `movieFile.releaseGroup`.
-2. **Locate ffmpeg**: `FFMPEG_PATH` env, else `ffmpeg` on PATH; `ffprobe` from
-   the same directory, else PATH. It is "ok" only if `-demuxers` lists
-   `dvdvideo` AND `-protocols` lists `bluray` (the full build has both; the disc
-   type is not known until probing). A successful check is cached.
+2. **Locate ffmpeg**: `FFMPEG_PATH` env (ffprobe must sit next to it), else
+   `ffmpeg`/`ffprobe` on PATH. It is "ok" only if `-demuxers` lists `dvdvideo`
+   AND `-protocols` lists `bluray` AND `ffprobe -version` runs (the full build
+   has all three; the disc type is not known until probing). A successful check
+   is cached.
 3. **Free space**: the staging volume must have ISO size + 1 GB free
    (`fs.statfs`).
 4. **Probe** (`probing`) → `{ kind, title?, sourceSeconds, height }`:
@@ -112,11 +113,14 @@ job as `done` or `failed` and releases the lock:
    MKV left in staging. Otherwise `POST /api/v3/command`
    `{ name: 'ManualImport', importMode: 'Move', files: [{ path, movieId,
    folderName: <release>, quality: { quality: <definition>, revision:
-   { version: 1, real: 0, isRepack: false } }, languages: [], releaseGroup }] }`
+   { version: 1, real: 0, isRepack: false } }, languages: <ISO's languages>,
+   releaseGroup: <ISO's releaseGroup> }] }`
    with quality `DVD` / `Remux-1080p` / `Remux-2160p` looked up by name from
    `/qualitydefinition`. Poll the command every 3 s for up to 60 min (a
    cross-volume move of a Blu-ray remux can take a while); timeout → `failed`
-   ("check Radarr > Activity"). Then re-read the movie: `done` only if its file
+   ("check Radarr > Activity"); a single failed poll is retried, not fatal.
+   Once the MKV is verified, every failure message ends with its path. Then
+   re-read the movie: `done` only if its file
    now ends in `.mkv`; else `failed` with the MKV path in the message. On
    success remove the staging folder with a best-effort, non-recursive `rmdir`
    (never takes a leftover file with it; ENOENT/ENOTEMPTY ignored so cleanup
