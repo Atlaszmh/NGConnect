@@ -31,7 +31,7 @@ export function isTerminal(status: string): boolean {
   return status !== 'queued' && status !== 'started';
 }
 
-async function fetchSabCompleteDir(): Promise<string> {
+export async function fetchSabCompleteDir(): Promise<string> {
   const url = new URL(`${config.sabnzbd.url}/api`);
   url.searchParams.set('mode', 'get_config');
   url.searchParams.set('section', 'misc');
