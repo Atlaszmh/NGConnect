@@ -83,6 +83,10 @@ job as `done` or `failed` and releases the lock:
      `sourceSeconds`. stdout JSON gives the video `height`. (ffmpeg ignores
      playlists under 3 min — `MIN_PLAYLIST_LENGTH` — irrelevant for features.)
    - Neither opens → `failed` ("not a readable DVD or Blu-ray image").
+   - Ambiguous feature → `failed`, disc image untouched ("use MakeMKV"): another
+     DVD title within 1 s of the longest, or another Blu-ray playlist with
+     exactly the selected playlist's length. Copy-protected discs ship such
+     decoys with scrambled cell/clip order; a remux of one would pass step 7.
 5. **Name**: `release = <Title>.<Year>.DVD` for DVDs, or
    `<Title>.<Year>.<1080p|2160p>.BluRay.REMUX` for Blu-rays (2160p when height >
    1080). `<Title>` is Radarr's title with characters invalid in Windows file
@@ -174,8 +178,9 @@ zero code. The title is also re-downloadable through the normal Search flow.
 
 - Job state is in memory: a server restart (e.g. an auto-deploy) mid-job loses
   it and leaves a `.partial` behind; re-running overwrites it.
-- Copy-protected DVDs with many decoy titles can defeat "longest title"; the
-  runtime check catches truncated/wrong-length picks but not a same-length decoy.
+- Copy-protected discs with same-length decoys are refused (step 4), not
+  converted. A decoy that is the single longest title by more than 1 s would
+  still be picked; the runtime check (step 7) is the backstop for that.
 - Blu-ray remuxes carry no chapters or track language tags (ffmpeg's `bluray:`
   protocol feeds a bare MPEG-TS). DVD remuxes keep both.
 - The Blu-ray path was verified locally against a single-playlist test ISO;
