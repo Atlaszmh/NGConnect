@@ -17,6 +17,7 @@ import { normalizeArrHistory } from '../services/arrHistory';
 import { getQueueSortConfig, updateQueueSortConfig } from '../services/queueSort';
 import { cancelDownload } from '../services/cancelDownload';
 import { startImportScan, getImportScanStatus } from '../services/importScan';
+import { getRemuxStatus, startRemux, RemuxError } from '../services/remuxJob';
 
 export const systemRouter = Router();
 
@@ -226,5 +227,27 @@ systemRouter.get('/import-scan/:sonarrId/:radarrId', async (req: Request, res: R
     const message = error instanceof Error ? error.message : 'Status check failed';
     console.error('import-scan status error:', message);
     res.status(502).json({ error: message });
+  }
+});
+
+// Convert a disc-image movie (DVD/Blu-ray ISO) into an MKV Plex can play, then
+// swap it in via Radarr. One job at a time; the client polls GET for progress.
+systemRouter.get('/remux', async (_req: Request, res: Response) => {
+  res.json(await getRemuxStatus());
+});
+
+systemRouter.post('/remux', async (req: Request, res: Response) => {
+  const movieId = Number(req.body?.movieId);
+  if (!Number.isInteger(movieId) || movieId <= 0) {
+    res.status(400).json({ error: 'movieId (positive integer) is required' });
+    return;
+  }
+  try {
+    res.status(202).json({ job: await startRemux(movieId) });
+  } catch (error) {
+    const status = error instanceof RemuxError ? error.status : 502;
+    const message = error instanceof Error ? error.message : 'Conversion failed to start';
+    console.error('remux start error:', message);
+    res.status(status).json({ error: message });
   }
 });

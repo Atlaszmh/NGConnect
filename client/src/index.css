@@ -695,6 +695,7 @@ input:focus, select:focus {
   background: linear-gradient(transparent, rgba(0,0,0,0.8));
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 6px;
   opacity: 0;
   transition: opacity 0.2s ease;
@@ -720,6 +721,17 @@ input:focus, select:focus {
   font-size: 0.75rem;
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+.movie-remux {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.movie-remux.failed {
+  color: var(--color-danger);
 }
 
 /* Stats Bar */
